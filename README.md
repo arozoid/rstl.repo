@@ -21,7 +21,6 @@ Server = https://arozoid.github.io/rstl.repo
 then:
 
 ```bash
-sudo pacman -Sy rstl-repo-keyring
 sudo pacman -Syu
 ```
 
