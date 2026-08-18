@@ -1,4 +1,4 @@
-# rstl-repo
+# rstl.repo
 
 custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.sway/) rice
 
