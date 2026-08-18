@@ -4,10 +4,10 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 
 ## packages
 
-- `rstlpk:` Minimal polkit authentication agent (no gtk)
-- `dssd:` Dead simple freedesktop SecretService implementation 
-- `xdg-desktop-portal-termfilechooser:` Terminal file chooser portal backend 
-- `yambar:` Modular status panel (built without -Werror) 
+- `rstlpk`: Minimal polkit authentication agent (no gtk)
+- `dssd`: Dead simple freedesktop SecretService implementation 
+- `xdg-desktop-portal-termfilechooser`: Terminal file chooser portal backend 
+- `yambar`: Modular status panel (built without -Werror) 
 
 ## usage
 
