@@ -14,12 +14,12 @@ sha256sums=('SKIP')
 options=(!strip)
 
 build() {
-  cd "papirus-icon-theme-$pkgver"
-  make PREFIX=/usr DESTDIR="$pkgdir" install
+  true
 }
 
 package() {
   cd "papirus-icon-theme-$pkgver"
+  make PREFIX=/usr DESTDIR="$pkgdir" install
   # remove everything except Papirus-Dark
   rm -rf "$pkgdir/usr/share/icons/Papirus"
   rm -rf "$pkgdir/usr/share/icons/Papirus-Light"
