@@ -30,6 +30,4 @@ package() {
   rm -f "$pkgdir/usr/share/icons/papirus-folders" 2>/dev/null || true
   rm -f "$pkgdir/usr/bin/papirus-folders" 2>/dev/null || true
   rm -rf "$pkgdir/usr/share/doc" 2>/dev/null || true
-  # install license
-  install -Dm644 COPYING "$pkgdir/usr/share/licenses/$pkgname/COPYING"
 }
