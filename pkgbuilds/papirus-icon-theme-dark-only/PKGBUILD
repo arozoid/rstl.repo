@@ -20,8 +20,7 @@ build() {
 package() {
   cd "papirus-icon-theme-$pkgver"
   make PREFIX=/usr DESTDIR="$pkgdir" install
-  # remove everything except Papirus-Dark
-  rm -rf "$pkgdir/usr/share/icons/Papirus"
+  # remove everything except Papirus-Dark (and base Papirus theme)
   rm -rf "$pkgdir/usr/share/icons/Papirus-Light"
   rm -rf "$pkgdir/usr/share/icons/ePapirus"
   rm -rf "$pkgdir/usr/share/icons/ePapirus-Dark"
