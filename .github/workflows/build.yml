@@ -24,7 +24,7 @@ jobs:
       options: --user root
     steps:
       - name: Install deps
-        run: pacman -Syu --noconfirm pacman-contrib git rust meson scdoc tllist xorgproto fcft libpulse systemd-libs libxcb libyaml pipewire pixman wayland wayland-protocols xcb-util xcb-util-cursor xcb-util-wm alsa-lib libinih base-devel
+        run: pacman -Syu --noconfirm pacman-contrib git rust meson scdoc tllist xorgproto fcft libpulse systemd-libs libxcb libyaml pipewire pixman wayland wayland-protocols xcb-util xcb-util-cursor xcb-util-wm alsa-lib libinih polkit xdg-desktop-portal base-devel
 
       - name: Add build user
         run: |
