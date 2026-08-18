@@ -29,4 +29,12 @@ package() {
   rm -f "$pkgdir/usr/share/icons/papirus-folders" 2>/dev/null || true
   rm -f "$pkgdir/usr/bin/papirus-folders" 2>/dev/null || true
   rm -rf "$pkgdir/usr/share/doc" 2>/dev/null || true
+  # keep only 24x24, symlink every other size to it
+  local sizes=(8x8 16x16 16x16@2x 18x18 18x18@2x 22x22 22x22@2x 24x24@2x 32x32 32x32@2x 42x42 48x48 48x48@2x 64x64 64x64@2x 84x84 96x96 128x128)
+  for size in "${sizes[@]}"; do
+    rm -rf "$pkgdir/usr/share/icons/Papirus/$size"
+    rm -rf "$pkgdir/usr/share/icons/Papirus-Dark/$size"
+    ln -s 24x24 "$pkgdir/usr/share/icons/Papirus/$size"
+    ln -s 24x24 "$pkgdir/usr/share/icons/Papirus-Dark/$size"
+  done
 }
