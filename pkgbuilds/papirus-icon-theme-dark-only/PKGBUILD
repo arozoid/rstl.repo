@@ -1,0 +1,35 @@
+# Maintainer: rustle
+pkgname=papirus-icon-theme-dark-only
+pkgver=20260801
+pkgrel=1
+pkgdesc="Papirus icon theme — Papirus-Dark only"
+arch=(any)
+url="https://github.com/PapirusDevelopmentTeam/papirus-icon-theme"
+license=(GPL-3.0)
+depends=(gtk-update-icon-cache)
+provides=(papirus-icon-theme)
+conflicts=(papirus-icon-theme)
+source=("$pkgname-$pkgver.tar.gz::https://github.com/PapirusDevelopmentTeam/papirus-icon-theme/archive/$pkgver/papirus-icon-theme-$pkgver.tar.gz")
+sha256sums=('SKIP')
+options=(!strip)
+
+build() {
+  cd "$pkgname-$pkgver"
+  make PREFIX=/usr DESTDIR="$pkgdir" install
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  # remove everything except Papirus-Dark
+  rm -rf "$pkgdir/usr/share/icons/Papirus"
+  rm -rf "$pkgdir/usr/share/icons/Papirus-Light"
+  rm -rf "$pkgdir/usr/share/icons/ePapirus"
+  rm -rf "$pkgdir/usr/share/icons/ePapirus-Dark"
+  rm -rf "$pkgdir/usr/share/icons/user-wallpapers"
+  # remove non-Papirus-Dark extras
+  rm -f "$pkgdir/usr/share/icons/papirus-folders" 2>/dev/null || true
+  rm -f "$pkgdir/usr/bin/papirus-folders" 2>/dev/null || true
+  rm -rf "$pkgdir/usr/share/doc" 2>/dev/null || true
+  # install license
+  install -Dm644 COPYING "$pkgdir/usr/share/licenses/$pkgname/COPYING"
+}

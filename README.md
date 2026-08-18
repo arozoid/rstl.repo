@@ -5,9 +5,11 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 ## packages
 
 - `rstlpk`: Minimal polkit authentication agent (no gtk)
-- `dssd`: Dead simple freedesktop SecretService implementation 
-- `xdg-desktop-portal-termfilechooser`: Terminal file chooser portal backend 
-- `yambar`: Modular status panel (built without -Werror) 
+- `dssd`: Dead simple freedesktop SecretService implementation
+- `xdg-desktop-portal-termfilechooser`: Terminal file chooser portal backend
+- `yambar`: Modular status panel (built without -Werror)
+- `ttf-jetbrains-mono-nerd-min`: JetBrains Mono Nerd Font — regular weight only (replaces `ttf-jetbrains-mono-nerd`)
+- `papirus-icon-theme-dark-only`: Papirus-Dark icon theme only (replaces `papirus-icon-theme`)
 
 ## usage
 

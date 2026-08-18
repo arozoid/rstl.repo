@@ -1,0 +1,24 @@
+# Maintainer: rustle
+pkgname=ttf-jetbrains-mono-nerd-min
+pkgver=3.5.0
+pkgrel=1
+pkgdesc="JetBrains Mono Nerd Font — minimal (regular weight only)"
+arch=(any)
+url="https://github.com/ryanoasis/nerd-fonts"
+license=(OFL-1.1-no-RFN)
+provides=(ttf-jetbrains-mono-nerd)
+conflicts=(ttf-jetbrains-mono-nerd nerd-fonts-jetbrains-mono)
+source=("JetBrainsMono.tar.xz::$url/releases/download/v$pkgver/JetBrainsMono.tar.xz")
+sha256sums=('SKIP')
+
+prepare() {
+  mkdir jetbrainsmono
+  bsdtar xf JetBrainsMono.tar.xz -C jetbrainsmono
+}
+
+package() {
+  install -Dm644 jetbrainsmono/JetBrainsMonoNerdFont-Regular.ttf \
+    "$pkgdir/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf"
+  install -Dm644 jetbrainsmono/OFL.txt \
+    "$pkgdir/usr/share/licenses/$pkgname/OFL.txt"
+}
