@@ -1,0 +1,11 @@
+repo/
+*.pkg.tar.*
+*.tar.gz
+*.db
+*.db.tar.gz
+*.db.tar.zst
+*.files
+*.files.tar.gz
+*.files.tar.zst
+src/
+*.sig
