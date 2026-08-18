@@ -39,16 +39,22 @@ jobs:
           for dir in pkgbuilds/*/; do
             pkg=$(basename "$dir")
             echo "::group::Building $pkg"
+            builddir="/tmp/build-$pkg"
+            mkdir -p "$builddir"
+            cp -a "$dir"/. "$builddir/"
+            chown -R builder:builder "$builddir"
             sudo -u builder bash -c "
-              cd '$dir'
+              cd '$builddir'
               makepkg --noconfirm --nocheck --skipchecksums --skipinteg --skippgpcheck 2>&1
             "
-            mv "$dir"*.pkg.tar.* repo/ 2>/dev/null || true
+            mv "$builddir"/*.pkg.tar.* repo/ 2>/dev/null || true
+            rm -rf "$builddir"
             echo "::endgroup::"
           done
 
       - name: Create repo database
         run: |
+          chown -R builder:builder repo
           sudo -u builder bash -c "
             cd repo
             repo-add rstl-repo.db.tar.gz *.pkg.tar.*
