@@ -15,7 +15,7 @@ add to `/etc/pacman.conf`:
 
 ```
 [rstl-repo]
-Server = https://arozoid.github.io/rstl-repo
+Server = https://arozoid.github.io/rstl.repo
 ```
 
 then:
