@@ -12,6 +12,7 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `papirus-icon-theme-dark-only`: Papirus-Dark icon theme only (replaces `papirus-icon-theme`)
 - `googledot-black`: GoogleDot-Black cursor theme only (replaces `googledot-cursor-theme`)
 - `python-clickgen`: X11 & Windows cursor building API (build dep of `googledot-black`)
+- `fsh`: Interactive terminal script suite, installed at `/opt/fsh` with `fsh -> /opt/fsh/run.sh` symlink in `/usr/local/bin`
 
 ## usage
 

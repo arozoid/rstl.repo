@@ -1,0 +1,21 @@
+# Maintainer: rustle
+pkgname=fsh
+pkgver=0.3.0
+pkgrel=1
+pkgdesc="Interactive terminal script suite built on f.sh, a pure-bash fuzzy menu library"
+arch=(any)
+url="https://github.com/pingu-hq/fsh"
+depends=(bash awk)
+options=(!strip)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('4dad08ad397a7703e8a6dff3c4f8b779b6c058dc1eb3965829529fbdd1e74470')
+
+package() {
+  cd "$pkgname-$pkgver"
+
+  install -d "$pkgdir/opt/fsh" "$pkgdir/usr/local/bin"
+  cp -a . "$pkgdir/opt/fsh/"
+  rm -f "$pkgdir/opt/fsh/.gitignore"
+
+  ln -s /opt/fsh/run.sh "$pkgdir/usr/local/bin/fsh"
+}

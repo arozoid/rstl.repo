@@ -36,20 +36,52 @@ jobs:
       - name: Build packages
         run: |
           mkdir -p repo
-          for dir in pkgbuilds/*/; do
-            pkg=$(basename "$dir")
-            echo "::group::Building $pkg"
-            builddir="/tmp/build-$pkg"
-            mkdir -p "$builddir"
-            cp -a "$dir"/. "$builddir/"
-            chown -R builder:builder "$builddir"
-            sudo -u builder bash -c "
-              cd '$builddir'
-              makepkg --noconfirm --nocheck --skipchecksums --skipinteg --skippgpcheck 2>&1
-            "
-            mv "$builddir"/*.pkg.tar.* repo/ 2>/dev/null || true
-            rm -rf "$builddir"
-            echo "::endgroup::"
+          declare -A built=()
+          pending() {
+            local dir pkg
+            for dir in pkgbuilds/*/; do
+              pkg=$(basename "$dir")
+              [ -n "${built[$pkg]:-}" ] || return 1
+            done
+          }
+          while ! pending; do
+            progress=0
+            for dir in pkgbuilds/*/; do
+              pkg=$(basename "$dir")
+              [ -n "${built[$pkg]:-}" ] && continue
+              readarray -t deps < <(bash -c '. "$1/PKGBUILD"; printf "%s\n" "${depends[@]:-}" "${makedepends[@]:-}"' bash "$dir" | sed '/^$/d')
+              if [ "${#deps[@]}" -gt 0 ] && ! pacman -T "${deps[@]}" >/dev/null 2>&1; then
+                echo "::group::Deferring $pkg (dependencies not installed yet)"
+                echo "::endgroup::"
+                continue
+              fi
+              echo "::group::Building $pkg"
+              builddir="/tmp/build-$pkg"
+              mkdir -p "$builddir"
+              cp -a "$dir"/. "$builddir/"
+              chown -R builder:builder "$builddir"
+              if sudo -u builder bash -c "
+                cd '$builddir'
+                makepkg --noconfirm --nocheck --skipchecksums --skipinteg --skippgpcheck 2>&1
+              "; then
+                pacman -U --noconfirm --needed "$builddir"/*.pkg.tar.*
+                mv "$builddir"/*.pkg.tar.* repo/
+                built[$pkg]=1
+                progress=1
+              else
+                echo "::error::$pkg failed to build"
+                exit 1
+              fi
+              rm -rf "$builddir"
+              echo "::endgroup::"
+            done
+            if [ "$progress" -eq 0 ]; then
+              for dir in pkgbuilds/*/; do
+                pkg=$(basename "$dir")
+                [ -n "${built[$pkg]:-}" ] || echo "::error::$pkg has unresolved dependencies"
+              done
+              exit 1
+            fi
           done
 
       - name: Create repo database
