@@ -10,6 +10,8 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `yambar`: Modular status panel (built without -Werror)
 - `ttf-jetbrains-mono-nerd-min`: JetBrains Mono Nerd Font — regular weight only (replaces `ttf-jetbrains-mono-nerd`)
 - `papirus-icon-theme-dark-only`: Papirus-Dark icon theme only (replaces `papirus-icon-theme`)
+- `googledot-black`: GoogleDot-Black cursor theme only (replaces `googledot-cursor-theme`)
+- `python-clickgen`: X11 & Windows cursor building API (build dep of `googledot-black`)
 
 ## usage
 
