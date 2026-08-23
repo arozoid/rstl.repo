@@ -50,8 +50,20 @@ jobs:
               pkg=$(basename "$dir")
               [ -n "${built[$pkg]:-}" ] && continue
               readarray -t deps < <(bash -c '. "$1/PKGBUILD"; printf "%s\n" "${depends[@]:-}" "${makedepends[@]:-}"' bash "$dir" | sed '/^$/d')
-              if [ "${#deps[@]}" -gt 0 ] && ! pacman -T "${deps[@]}" >/dev/null 2>&1; then
-                echo "::group::Deferring $pkg (dependencies not installed yet)"
+              defer_pkg=0
+              if ! pacman -T "${deps[@]}" >/dev/null 2>&1; then
+                # only defer if a missing dep is provided by another package in this repo;
+                # anything else comes from the official repos and makepkg --syncdeps will fetch it
+                for dep in "${deps[@]}"; do
+                  name=${dep%%[<>=]*}
+                  if [ -d "pkgbuilds/$name" ] && [ -z "${built[$name]:-}" ]; then
+                    defer_pkg=1
+                    break
+                  fi
+                done
+              fi
+              if [ "$defer_pkg" -eq 1 ]; then
+                echo "::group::Deferring $pkg (waiting on repo packages)"
                 echo "::endgroup::"
                 continue
               fi
@@ -62,7 +74,7 @@ jobs:
               chown -R builder:builder "$builddir"
               if sudo -u builder bash -c "
                 cd '$builddir'
-                makepkg --noconfirm --nocheck --skipchecksums --skipinteg --skippgpcheck 2>&1
+                makepkg --syncdeps --noconfirm --nocheck --skipchecksums --skipinteg --skippgpcheck 2>&1
               "; then
                 pacman -U --noconfirm --needed "$builddir"/*.pkg.tar.*
                 mv "$builddir"/*.pkg.tar.* repo/

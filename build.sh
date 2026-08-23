@@ -29,12 +29,24 @@ while ! pending; do
     pkg=$(basename "$dir")
     [ -n "${built[$pkg]:-}" ] && continue
     mapfile -t deps < <(bash -c '. "$1/PKGBUILD"; printf "%s\n" "${depends[@]:-}" "${makedepends[@]:-}"' bash "$dir" | sed '/^$/d')
-    if [ "${#deps[@]}" -gt 0 ] && ! pacman -T "${deps[@]}" >/dev/null 2>&1; then
-      echo "==> Deferring $pkg (dependencies not installed yet)"
+    defer_pkg=0
+    if ! pacman -T "${deps[@]}" >/dev/null 2>&1; then
+      # only defer if a missing dep is provided by another package in this repo;
+      # anything else comes from the official repos and makepkg --syncdeps will fetch it
+      for dep in "${deps[@]}"; do
+        name=${dep%%[<>=]*}
+        if [ -d "$PKGBUILDS/$name" ] && [ -z "${built[$name]:-}" ]; then
+          defer_pkg=1
+          break
+        fi
+      done
+    fi
+    if [ "$defer_pkg" -eq 1 ]; then
+      echo "==> Deferring $pkg (waiting on repo packages)"
       continue
     fi
     echo "==> Building $pkg"
-    if ( cd "$dir" && makepkg --noconfirm --nocheck --skipchecksums --skipinteg --skippgpcheck ); then
+    if ( cd "$dir" && makepkg --syncdeps --noconfirm --nocheck --skipchecksums --skipinteg --skippgpcheck ); then
       pacman_install "$dir"*.pkg.tar.*
       mv "$dir"*.pkg.tar.* "$PKGDIR/"
       built[$pkg]=1
