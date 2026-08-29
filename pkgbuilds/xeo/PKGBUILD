@@ -1,0 +1,24 @@
+# Maintainer: arozoid 
+pkgname=xeo
+pkgver=4.0.0
+pkgrel=1
+pkgdesc="The .xeo scripting language interpreter (edition 2024)"
+arch=(x86_64)
+url="https://github.com/arozoid/xeo"
+license=(MIT)
+depends=(rust)
+makedepends=(rust)
+_commit="b926db234be0a277b9c14f6fbc86067e96c3e2c5"
+source=("$pkgname-$pkgver.tar.gz::$url/archive/$_commit.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$srcdir"/xeo-*
+  cargo build --release
+}
+
+package() {
+  cd "$srcdir"/xeo-*
+  install -Dm755 target/release/xeo "$pkgdir/usr/bin/xeo"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
+}
