@@ -1,14 +1,14 @@
 # Maintainer: arozoid 
 pkgname=xeo
 pkgver=4.0.0
-pkgrel=1
+pkgrel=2
 pkgdesc="The .xeo scripting language interpreter (edition 2024)"
 arch=(x86_64)
 url="https://github.com/arozoid/xeo"
 license=(MIT)
 depends=(rust)
 makedepends=(rust)
-_commit="b926db234be0a277b9c14f6fbc86067e96c3e2c5"
+_commit="e66c37d8ff747216a78a5527271589af01c2b27d"
 source=("$pkgname-$pkgver.tar.gz::$url/archive/$_commit.tar.gz")
 sha256sums=('SKIP')
 

@@ -1,23 +1,20 @@
 # Maintainer: arozoid 
-pkgname=rstlpk
+pkgname=calawk
 pkgver=0.1.0
 pkgrel=1
-pkgdesc="Minimal polkit authentication agent for the rstl.sway rice (no gtk)"
-arch=(x86_64)
+pkgdesc="Small interactive (and non-interactive) expression calculator wrapper around awk"
+arch=(any)
 url="https://github.com/arozoid/rstlpk"
 license=(MIT)
-depends=(polkit)
-makedepends=(rust)
+depends=(awk sh)
+makedepends=()
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
-build() {
-  cd "$pkgname-$pkgver"
-  cargo build --release
-}
+build() {}
 
 package() {
   cd "$pkgname-$pkgver"
-  install -Dm755 target/release/$pkgname "$pkgdir/usr/bin/$pkgname"
+  install -Dm755 main.sh "$pkgdir/usr/bin/$pkgname"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
 }

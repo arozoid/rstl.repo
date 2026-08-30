@@ -1,14 +1,14 @@
 # Maintainer: arozoid 
 pkgname=xeon
 pkgver=0.2.0
-pkgrel=1
+pkgrel=2
 pkgdesc="The 'modern' package manager for .xeo packages"
 arch=(x86_64)
 url="https://github.com/arozoid/xeon"
 license=(MIT)
 depends=(xeo git)
 makedepends=(rust)
-_commit="e3103f9fbf6b7ad43eec8b8286e3f78665b43e57"
+_commit="eab74e9111cd6e02e7598dc3cbf8715ce7bca31f"
 source=("$pkgname-$pkgver.tar.gz::$url/archive/$_commit.tar.gz")
 sha256sums=('SKIP')
 
