@@ -6,15 +6,15 @@ pkgdesc="The .xeo scripting language interpreter (edition 2024)"
 arch=(x86_64)
 url="https://github.com/arozoid/xeo"
 license=(MIT)
-depends=(rust)
-makedepends=(rust)
+makedepends=(rustup)
 # auto: release
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
 build() {
   cd "$pkgname-$pkgver"
-  cargo build --release
+  rustup toolchain install nightly --profile minimal --component rust-src
+  cargo +nightly build --release
 }
 
 package() {

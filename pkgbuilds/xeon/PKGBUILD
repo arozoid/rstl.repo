@@ -7,7 +7,7 @@ arch=(x86_64)
 url="https://github.com/arozoid/xeon"
 license=(MIT)
 depends=(xeo git)
-makedepends=(rust)
+makedepends=(rustup)
 # auto: date
 _commit=""
 source=("$pkgname-$pkgver.tar.gz::$url/archive/$_commit.tar.gz")

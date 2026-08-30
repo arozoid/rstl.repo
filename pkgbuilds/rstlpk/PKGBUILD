@@ -7,7 +7,7 @@ arch=(x86_64)
 url="https://github.com/arozoid/rstlpk"
 license=(MIT)
 depends=(polkit)
-makedepends=(rust)
+makedepends=(rustup)
 # auto: release
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')

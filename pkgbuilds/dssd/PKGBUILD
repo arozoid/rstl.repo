@@ -6,7 +6,7 @@ pkgdesc="Dead simple freedesktop SecretService implementation"
 url="https://github.com/ylxdzsw/dssd"
 arch=(any)
 license=(MIT)
-makedepends=(cargo)
+makedepends=(rustup)
 depends=(dbus)
 provides=("org.freedesktop.secrets")
 # auto: release
