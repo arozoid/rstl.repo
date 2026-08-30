@@ -71,6 +71,10 @@ jobs:
               builddir="/tmp/build-$pkg"
               mkdir -p "$builddir"
               cp -a "$dir"/. "$builddir/"
+              if grep -q '^# auto:' "$builddir/PKGBUILD"; then
+                echo "Resolving latest version for $pkg"
+                bash inject.sh "$PWD" "$builddir/PKGBUILD"
+              fi
               chown -R builder:builder "$builddir"
               if sudo -u builder bash -c "
                 cd '$builddir'

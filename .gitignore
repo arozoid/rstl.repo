@@ -1,4 +1,5 @@
 repo/
+.build-*/
 *.pkg.tar.*
 *.tar.gz
 *.db

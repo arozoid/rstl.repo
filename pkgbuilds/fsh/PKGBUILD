@@ -7,8 +7,9 @@ arch=(any)
 url="https://github.com/pingu-hq/fsh"
 depends=(bash awk)
 options=(!strip)
+# auto: release
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('4dad08ad397a7703e8a6dff3c4f8b779b6c058dc1eb3965829529fbdd1e74470')
+sha256sums=('SKIP')
 
 package() {
   cd "$pkgname-$pkgver"

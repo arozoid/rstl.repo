@@ -8,6 +8,7 @@ url="https://github.com/ryanoasis/nerd-fonts"
 license=(OFL-1.1-no-RFN)
 provides=(ttf-jetbrains-mono-nerd)
 conflicts=(ttf-jetbrains-mono-nerd nerd-fonts-jetbrains-mono)
+# auto: release
 source=("JetBrainsMono.tar.xz::$url/releases/download/v$pkgver/JetBrainsMono.tar.xz")
 sha256sums=('SKIP')
 

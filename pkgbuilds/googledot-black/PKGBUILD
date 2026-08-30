@@ -10,8 +10,9 @@ makedepends=("python-clickgen>2.0.0")
 provides=(googledot-cursor-theme)
 conflicts=(googledot-cursor-theme)
 options=(!strip)
+# auto: release
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('4e681d9c42e7ec1322953f4c4e1874f9d289c32e07893321dd44a0aa8c3be1f0')
+sha256sums=('SKIP')
 
 prepare() {
   cd "Google_Cursor-$pkgver"

@@ -9,6 +9,7 @@ license=(GPL-3.0)
 depends=(gtk-update-icon-cache)
 provides=(papirus-icon-theme)
 conflicts=(papirus-icon-theme)
+# auto: release
 source=("$pkgname-$pkgver.tar.gz::https://github.com/PapirusDevelopmentTeam/papirus-icon-theme/archive/$pkgver/papirus-icon-theme-$pkgver.tar.gz")
 sha256sums=('SKIP')
 options=(!strip)

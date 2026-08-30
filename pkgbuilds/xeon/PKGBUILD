@@ -1,24 +1,25 @@
-# Maintainer: arozoid 
+# Maintainer: arozoid
 pkgname=xeon
 pkgver=0.2.0
-pkgrel=2
+pkgrel=1
 pkgdesc="The 'modern' package manager for .xeo packages"
 arch=(x86_64)
 url="https://github.com/arozoid/xeon"
 license=(MIT)
 depends=(xeo git)
 makedepends=(rust)
-_commit="eab74e9111cd6e02e7598dc3cbf8715ce7bca31f"
+# auto: date
+_commit=""
 source=("$pkgname-$pkgver.tar.gz::$url/archive/$_commit.tar.gz")
 sha256sums=('SKIP')
 
 build() {
-  cd "$srcdir"/xeon-$_commit
+  cd "$srcdir/$pkgname-$_commit"
   cargo build --release
 }
 
 package() {
-  cd "$srcdir"/xeon-$_commit
+  cd "$srcdir/$pkgname-$_commit"
   install -Dm755 target/release/xeon "$pkgdir/usr/bin/xeon"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
 }

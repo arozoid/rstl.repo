@@ -21,6 +21,7 @@ source=(
 )
 sha256sums=('SKIP')
 conflicts=(xdg-desktop-portal-termfilechooser)
+# auto: release
 
 build() {
   cd $pkgname-$pkgver

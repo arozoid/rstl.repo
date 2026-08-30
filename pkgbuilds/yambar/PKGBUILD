@@ -12,10 +12,10 @@ optdepends=('alsa-lib: ALSA module'
             'json-c: XKB module'
             'libmpdclient: MPD module'
             'xcb-util-errors: better X error messages')
-makedepends=(git meson scdoc tllist xorgproto)
-source=("git+$url.git?signed#commit=a2d30b96fbb026621ec11692272f0117f35a00fd")
+makedepends=(meson scdoc tllist xorgproto)
+# auto: release
+source=(yambar-$pkgver.tar.gz::https://codeberg.org/dnkl/yambar/archive/$pkgver.tar.gz)
 b2sums=('SKIP')
-validpgpkeys=('B19964FBBA09664CC81027ED5BBD4992C116573F')
 
 prepare() {
 	mkdir build

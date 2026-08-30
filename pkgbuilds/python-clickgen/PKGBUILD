@@ -9,8 +9,9 @@ url="https://github.com/ful1e5/clickgen"
 license=(MIT)
 depends=(python-attrs python-numpy python-pillow python-toml python-yaml)
 makedepends=(python-build python-installer python-setuptools python-wheel)
+# auto: release
 source=("$_name-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('e76f55eacd66db11d004d2f1a33f42b12d4823d6653e8a288277b045911d51d9')
+sha256sums=('SKIP')
 
 build() {
   cd "$_name-$pkgver"

@@ -8,6 +8,7 @@ url="https://github.com/arozoid/rstlpk"
 license=(MIT)
 depends=(polkit)
 makedepends=(rust)
+# auto: release
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 

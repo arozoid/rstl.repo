@@ -45,13 +45,27 @@ while ! pending; do
       echo "==> Deferring $pkg (waiting on repo packages)"
       continue
     fi
+
+    # Build in a scratch dir so the source PKGBUILD is never mutated.
+    builddir="$REPO_DIR/.build-$pkg"
+    rm -rf "$builddir"
+    mkdir -p "$builddir"
+    cp -a "$dir"/. "$builddir/"
+
+    if grep -q '^# auto:' "$builddir/PKGBUILD"; then
+      echo "==> Resolving latest version for $pkg"
+      "$REPO_DIR/inject.sh" "$REPO_DIR" "$builddir/PKGBUILD"
+    fi
+
     echo "==> Building $pkg"
-    if ( cd "$dir" && makepkg --syncdeps --noconfirm --nocheck --skipchecksums --skipinteg --skippgpcheck ); then
-      pacman_install "$dir"*.pkg.tar.*
-      mv "$dir"*.pkg.tar.* "$PKGDIR/"
+    if ( cd "$builddir" && makepkg --syncdeps --noconfirm --nocheck --skipchecksums --skipinteg --skippgpcheck ); then
+      pacman_install "$builddir"/*.pkg.tar.*
+      mv "$builddir"/*.pkg.tar.* "$PKGDIR/"
+      rm -rf "$builddir"
       built[$pkg]=1
       progress=1
     else
+      rm -rf "$builddir"
       echo "==> ERROR: $pkg failed to build" >&2
       exit 1
     fi
