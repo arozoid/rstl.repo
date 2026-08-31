@@ -1,0 +1,25 @@
+# Maintainer: arozoid
+pkgname=oxicord
+pkgver=0.1.9
+pkgrel=1
+pkgdesc="Vim-native Discord TUI for terminal enthusiasts"
+arch=(x86_64)
+url="https://github.com/linuxmobile/oxicord"
+license=(GPL-3.0-only)
+depends=(chafa dbus glibc libgcc)
+makedepends=(rustup)
+options=(!lto)
+# auto: release
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgname-$pkgver"
+  cargo build --release --all-features
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 target/release/oxicord "$pkgdir/usr/bin/oxicord"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
+}

@@ -16,6 +16,7 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `xeo`: The `.xeo` scripting language interpreter (edition 2024)
 - `xeon`: The 'modern' package manager for `.xeo` packages
 - `calawk`: Small interactive expression calculator wrapper around awk
+- `oxicord`: Vim-native Discord TUI client
 
 Packages auto-track their upstream: repos with releases use the latest release tag as the version (e.g. `3.5.1`); repos without releases use `YYYYMMDD`. `resolve.sh` + `inject.sh` patch the PKGBUILD at build time, so a scheduled build picks up new upstream versions automatically — no manual bumps needed.
 
