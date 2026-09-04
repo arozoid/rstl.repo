@@ -12,7 +12,10 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `papirus-icon-theme-dark-only`: Papirus-Dark icon theme only (replaces `papirus-icon-theme`)
 - `googledot-black`: GoogleDot-Black cursor theme only (replaces `googledot-cursor-theme`)
 - `python-clickgen`: X11 & Windows cursor building API (build dep of `googledot-black`)
-- `fsh`: Interactive terminal script suite, installed at `/opt/fsh` with `fsh -> /opt/fsh/run.sh` symlink in `/usr/local/bin`
+- `bluetuith`: TUI-based bluetooth connection manager
+- `clipse`: Configurable TUI clipboard manager for Unix
+- `latuicon`: TUI icon picker (emojis / kaomojis / unicode / nerd fonts)
+- `rstl-pick`: Compact fuzzy search TUI picker for terminal apps (nmtui / wiremix / clipse / bluetuith / latuicon)
 - `xeo`: The `.xeo` scripting language interpreter (edition 2024)
 - `xeon`: The 'modern' package manager for `.xeo` packages
 - `calawk`: Small interactive expression calculator wrapper around awk
