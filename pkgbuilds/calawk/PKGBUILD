@@ -7,15 +7,16 @@ arch=(any)
 url="https://github.com/arozoid/calawk"
 license=(MIT)
 depends=(awk sh)
-# auto: date
-_commit=""
-source=("$pkgname-$pkgver.tar.gz::$url/archive/$_commit.tar.gz")
+# Source is pinned to the v0.1.0 tag (no # auto: marker) so the build never
+# depends on the GitHub API, which rate-limits unauthenticated requests from
+# shared CI egress IPs and previously caused empty _commit / 404 downloads.
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
 build() { :; }
 
 package() {
-  cd "$srcdir/$pkgname-$_commit"
+  cd "$srcdir/$pkgname-$pkgver"
   install -Dm755 main.sh "$pkgdir/usr/bin/$pkgname"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
 }
