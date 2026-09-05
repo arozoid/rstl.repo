@@ -25,16 +25,22 @@ if grep -q '^# auto:' "$builddir/PKGBUILD"; then
   bash "$root/inject.sh" "$root" "$builddir/PKGBUILD"
 fi
 
-# rust builds reuse a persistent cargo home/target across runs
+# rust/build caches: reuse persistent cargo home/target; Go caches go under the
+# same workspace tree so they are writable by the (non-root) builder and cacheable.
 export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$CARGO_HOME/target}"
-mkdir -p "$CARGO_HOME" "$CARGO_TARGET_DIR"
+export GOPATH="${GOPATH:-$HOME/go}"
+export GOMODCACHE="${GOMODCACHE:-$GOPATH/pkg/mod}"
+export GOCACHE="${GOCACHE:-$HOME/.cache/go-build}"
+mkdir -p "$CARGO_HOME" "$CARGO_TARGET_DIR" "$GOPATH" "$GOMODCACHE" "$GOCACHE"
 
 makepkg_cmd='makepkg --syncdeps --noconfirm --nocheck --skipchecksums --skipinteg --skippgpcheck'
 if [ -n "${BUILDER:-}" ]; then
-  chown -R "$BUILDER" "$builddir" "$CARGO_HOME" "${RUSTUP_HOME:-/dev/null}" 2>/dev/null || true
+  chown -R "$BUILDER" "$builddir" "$CARGO_HOME" "${RUSTUP_HOME:-/dev/null}" \
+    "$GOPATH" "$GOMODCACHE" "$GOCACHE" 2>/dev/null || true
   sudo -E -u "$BUILDER" bash -c "
     export CARGO_HOME='$CARGO_HOME' CARGO_TARGET_DIR='$CARGO_TARGET_DIR' RUSTUP_HOME='${RUSTUP_HOME:-}'
+    export GOPATH='$GOPATH' GOMODCACHE='$GOMODCACHE' GOCACHE='$GOCACHE'
     cd '$builddir'
     $makepkg_cmd 2>&1
   "

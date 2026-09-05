@@ -61,6 +61,9 @@ jobs:
       CARGO_HOME: ${{ github.workspace }}/.cargo
       CARGO_TARGET_DIR: ${{ github.workspace }}/.cargo/target
       RUSTUP_HOME: ${{ github.workspace }}/.rustup
+      GOPATH: ${{ github.workspace }}/.gopath
+      GOMODCACHE: ${{ github.workspace }}/.gomodcache
+      GOCACHE: ${{ github.workspace }}/.gocache
     steps:
       - name: Install deps
         run: pacman -Syu --noconfirm pacman-contrib git jq github-cli rustup meson scdoc tllist xorgproto fcft libpulse systemd-libs libxcb libyaml pipewire pixman wayland wayland-protocols xcb-util xcb-util-cursor xcb-util-wm alsa-lib libinih polkit xdg-desktop-portal base-devel gtk-update-icon-cache
@@ -73,6 +76,9 @@ jobs:
           path: |
             ${{ github.workspace }}/.cargo
             ${{ github.workspace }}/.rustup
+            ${{ github.workspace }}/.gopath
+            ${{ github.workspace }}/.gomodcache
+            ${{ github.workspace }}/.gocache
           key: cargo-${{ matrix.shard }}-${{ hashFiles('pkgbuilds/**') }}
           restore-keys: |
             cargo-${{ matrix.shard }}-
