@@ -42,14 +42,22 @@ case "$mode" in
     esac
     # Gather version-like tags, then pick the highest by numeric version sort.
     # Tags may carry a Python-style ".postN" suffix (e.g. 0.10.1.post1).
-    cands=()
+    # Dotted versions win: some upstreams also push bare-numeric git/timestamp
+    # tags (e.g. phinger-cursors ships "1410987542" style tags) which must not
+    # outrank real releases like 2.1, so bare numbers are only a last resort.
+    dotted=() bare=()
     while IFS= read -r tag; do
       [ -z "$tag" ] && continue
-      bare=${tag#v}
-      [[ $bare =~ ^[0-9]+(\.[0-9]+){0,2}(\.post[0-9]+)?$ ]] || continue
-      cands+=("$bare")
+      bare_tag=${tag#v}
+      if [[ $bare_tag =~ ^[0-9]+(\.[0-9]+)+(\.post[0-9]+)?$ ]]; then
+        dotted+=("$bare_tag")
+      elif [[ $bare_tag =~ ^[0-9]+$ ]]; then
+        bare+=("$bare_tag")
+      fi
     done < <(printf '%s' "$json" | grep -oE '"name":"[^"]*"' | sed -E 's/^"name":"//;s/"$//')
-    if [ "${#cands[@]}" -eq 0 ]; then
+    if [ "${#dotted[@]}" -gt 0 ]; then cands=("${dotted[@]}")
+    elif [ "${#bare[@]}" -gt 0 ]; then cands=("${bare[@]}")
+    else
       echo "resolve.sh: no version-like tag found for $url" >&2
       exit 1
     fi
