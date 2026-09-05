@@ -12,7 +12,7 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `papirus-icon-theme-dark-only`: Papirus-Dark icon theme only (replaces `papirus-icon-theme`)
 - `xcursor-pro-dark`: Modern Professional Dark cursor theme only (replaces `xcursor-pro-cursor-theme`)
 - `python-clickgen`: X11 & Windows cursor building API (build dep of `xcursor-pro-dark`)
-- `phinger-cursors`: Dark/light Wayland-native cursor themes (rstl.sway default = dark, small size)
+- `phinger-cursors`: Dark Wayland-native cursor themes (rstl.sway default = dark, 48px)
 - `bluetuith`: TUI-based bluetooth connection manager
 - `clipse`: Configurable TUI clipboard manager for Unix
 - `latuicon`: TUI icon picker (emojis / kaomojis / unicode / nerd fonts)

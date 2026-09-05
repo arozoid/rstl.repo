@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rewrite an Xcursor file in place so it only contains 24px images.
+"""Rewrite an Xcursor file in place so it only contains 48px images.
 
 Xcursor wire format (libXcursor src/file.c):
   file:  "Xcur" magic(4) + header: hsz(4=16) version(4) ntoc(4)
@@ -9,14 +9,14 @@ Xcursor wire format (libXcursor src/file.c):
          + width*height x { u32 RGBA pixel }
   chunk byte length = 36 + width*height*4
 Compositors pick the embedded size closest to the requested one; keeping only
-the 24px images forces the small cursor everywhere.
+the 48px images forces the cursor size everywhere.
 """
 import struct
 import sys
 
 MAGIC = b'Xcur'
 IMAGE = 0xFFFD0002
-KEEP_SIZE = 24
+KEEP_SIZE = 48
 
 
 def read(file, offset, count):
@@ -49,9 +49,9 @@ def main(path):
     if len(kept) == ntoc:
         return
 
-    out = bytearray(raw[:16])
-    out += struct.pack('<I', len(kept))
-    out += b'\0' * (12 * len(kept))
+    out = bytearray(raw[:12])            # magic + header_size + version only
+    out += struct.pack('<I', len(kept))  # real ntoc
+    out += b'\0' * (12 * len(kept))      # toc table
     offset = len(out)
     for i, (t, size, off) in enumerate(kept):
         clen = chunk_len(raw, t, off)
