@@ -24,6 +24,10 @@ jobs:
   # -------------------------------------------------------------------------
   enumerate:
     runs-on: ubuntu-latest
+    outputs:
+      packages_json: ${{ steps.plan.outputs.packages_json }}
+      shard_map_json: ${{ steps.plan.outputs.shard_map_json }}
+      slots: ${{ steps.plan.outputs.slots }}
     steps:
       - uses: actions/checkout@v7
       - id: plan
@@ -163,6 +167,11 @@ jobs:
           pattern: shard-*
           path: /tmp/repo
           merge-multiple: true
+
+      - name: Verify collected packages
+        run: |
+          test -n "$(find /tmp/repo -type f -name '*.pkg.tar.*' 2>/dev/null | head -1)" \
+            || { echo "::error::no package artifacts collected (nothing built?)" >&2; exit 1; }
 
       - name: Flatten packages into repo/
         run: |
