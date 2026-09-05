@@ -11,6 +11,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  actions: read
 
 concurrency:
   group: pages
@@ -139,6 +140,9 @@ jobs:
               until gh run download "$GITHUB_RUN_ID" -n "shard-$dslot" -D "/tmp/deps/$dslot" 2>/dev/null; do
                 tries=$((tries + 1))
                 [ "$tries" -ge 360 ] && { echo "::error::timed out waiting for dependency '$dep' (slot $dslot)" >&2; exit 1; }
+                if [ $((tries % 12)) -eq 0 ]; then
+                  echo "::warning::waiting for shard-$dslot ($dep) — ${tries}0s elapsed" >&2
+                fi
                 sleep 10
               done
               pacman -U --noconfirm --needed $(find "/tmp/deps/$dslot" -type f -name '*.pkg.tar.*')
