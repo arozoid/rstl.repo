@@ -7,11 +7,11 @@ PKGBUILDS="$REPO_DIR/pkgbuilds"
 
 mkdir -p "$PKGDIR"
 
-if [ "$(id -u)" -eq 0 ]; then
-  pacman_install() { pacman -U --noconfirm --needed "$@"; }
-else
-  pacman_install() { sudo pacman -U --noconfirm --needed "$@" || echo "==> WARNING: could not install $* (continuing)"; }
-fi
+# persistent cargo cache shared by every rust package build in this repo
+RSTL_CARGO_CACHE="${RSTL_CARGO_CACHE:-$REPO_DIR/.cargo-cache}"
+mkdir -p "$RSTL_CARGO_CACHE/home" "$RSTL_CARGO_CACHE/target"
+export CARGO_HOME="$RSTL_CARGO_CACHE/home"
+export CARGO_TARGET_DIR="$RSTL_CARGO_CACHE/target"
 
 declare -A built=()
 
@@ -46,26 +46,15 @@ while ! pending; do
       continue
     fi
 
-    # Build in a scratch dir so the source PKGBUILD is never mutated.
-    builddir="$REPO_DIR/.build-$pkg"
-    rm -rf "$builddir"
-    mkdir -p "$builddir"
-    cp -a "$dir"/. "$builddir/"
-
-    if grep -q '^# auto:' "$builddir/PKGBUILD"; then
-      echo "==> Resolving latest version for $pkg"
-      "$REPO_DIR/inject.sh" "$REPO_DIR" "$builddir/PKGBUILD"
-    fi
-
+    # Build via the shared per-package helper (installs the result so in-repo
+    # deps resolve, and leaves artifacts in $REPO_DIR/out/<pkg>/)
     echo "==> Building $pkg"
-    if ( cd "$builddir" && makepkg --syncdeps --noconfirm --nocheck --skipchecksums --skipinteg --skippgpcheck ); then
-      pacman_install "$builddir"/*.pkg.tar.*
-      mv "$builddir"/*.pkg.tar.* "$PKGDIR/"
-      rm -rf "$builddir"
+    if bash "$REPO_DIR/.github/scripts/build-pkg.sh" "$pkg"; then
+      mv "$REPO_DIR"/out/$pkg/*.pkg.tar.* "$PKGDIR/"
+      rm -rf "$REPO_DIR/out/$pkg"
       built[$pkg]=1
       progress=1
     else
-      rm -rf "$builddir"
       echo "==> ERROR: $pkg failed to build" >&2
       exit 1
     fi

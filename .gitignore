@@ -1,5 +1,7 @@
 repo/
 .build-*/
+out/
+.cargo-cache/
 *.pkg.tar.*
 *.tar.gz
 *.db

@@ -10,8 +10,8 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `yambar`: Modular status panel (built without -Werror)
 - `ttf-jetbrains-mono-nerd-min`: JetBrains Mono Nerd Font — regular weight only (replaces `ttf-jetbrains-mono-nerd`)
 - `papirus-icon-theme-dark-only`: Papirus-Dark icon theme only (replaces `papirus-icon-theme`)
-- `googledot-black`: GoogleDot-Black cursor theme only (replaces `googledot-cursor-theme`)
-- `python-clickgen`: X11 & Windows cursor building API (build dep of `googledot-black`)
+- `xcursor-pro-dark`: Modern Professional Dark cursor theme only (replaces `xcursor-pro-cursor-theme`)
+- `python-clickgen`: X11 & Windows cursor building API (build dep of `xcursor-pro-dark`)
 - `bluetuith`: TUI-based bluetooth connection manager
 - `clipse`: Configurable TUI clipboard manager for Unix
 - `latuicon`: TUI icon picker (emojis / kaomojis / unicode / nerd fonts)
@@ -20,6 +20,7 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `xeon`: The 'modern' package manager for `.xeo` packages
 - `calawk`: Small interactive expression calculator wrapper around awk
 - `oxicord`: Vim-native Discord TUI client
+- `rovr-bin`: Post-modern terminal file explorer (Nuitka binary)
 
 Packages auto-track their upstream: repos with releases use the latest release tag as the version (e.g. `3.5.1`); repos without releases use `YYYYMMDD`. `resolve.sh` + `inject.sh` patch the PKGBUILD at build time, so a scheduled build picks up new upstream versions automatically — no manual bumps needed.
 

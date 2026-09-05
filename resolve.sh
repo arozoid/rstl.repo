@@ -41,11 +41,12 @@ case "$mode" in
         ;;
     esac
     # Gather version-like tags, then pick the highest by numeric version sort.
+    # Tags may carry a Python-style ".postN" suffix (e.g. 0.10.1.post1).
     cands=()
     while IFS= read -r tag; do
       [ -z "$tag" ] && continue
       bare=${tag#v}
-      [[ $bare =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || continue
+      [[ $bare =~ ^[0-9]+(\.[0-9]+){0,2}(\.post[0-9]+)?$ ]] || continue
       cands+=("$bare")
     done < <(printf '%s' "$json" | grep -oE '"name":"[^"]*"' | sed -E 's/^"name":"//;s/"$//')
     if [ "${#cands[@]}" -eq 0 ]; then
@@ -53,8 +54,12 @@ case "$mode" in
       exit 1
     fi
     best=$(printf '%s\n' "${cands[@]}" | {
-      while IFS=. read -r a b c; do
-        printf '%03d.%03d.%03d %s\n' "${a:-0}" "${b:-0}" "${c:-0}" "$a${b:+.$b}${c:+.$c}"
+      while IFS= read -r ver; do
+        base=${ver%%.post*}
+        post=0
+        [[ $ver != "$base" ]] && post=${ver##*.post}
+        IFS=. read -r a b c <<<"$base"
+        printf '%03d.%03d.%03d.%03d %s\n' "${a:-0}" "${b:-0}" "${c:-0}" "$post" "$ver"
       done
     } | sort -r | head -1 | awk '{print $2}')
     printf 'pkgver=%s\n' "$best"

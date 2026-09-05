@@ -1,0 +1,22 @@
+# Maintainer: rustle
+pkgname=rovr-bin
+pkgver=0.10.1.post1
+pkgrel=1
+pkgdesc="A post-modern terminal file explorer"
+arch=(x86_64)
+url="https://github.com/NSPC911/rovr"
+license=(MIT)
+depends=(bash glibc libgcc libstdc++ zlib)
+makedepends=(unzip)
+options=(!strip)
+# auto: release
+source=("$pkgname-$pkgver.zip::$url/releases/download/v$pkgver/rovr-linux-x64-nuitka.zip")
+sha256sums=('SKIP')
+
+package() {
+  unzip -q "$pkgname-$pkgver.zip" -d "$pkgdir/opt/rovr"
+  install -Dm755 /dev/stdin "$pkgdir/usr/bin/rovr" <<END
+#!/usr/bin/env sh
+exec /opt/rovr/rovr "\$@"
+END
+}

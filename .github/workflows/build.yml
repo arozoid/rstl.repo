@@ -17,102 +17,171 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # -------------------------------------------------------------------------
+  # enumerate — topological build order + shard assignment. Packages are split
+  # across RSTL_SLOTS fixed worker slots; the worker matrix is independent of
+  # which (or how many) packages exist.
+  # -------------------------------------------------------------------------
+  enumerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - id: plan
+        run: |
+          set -euo pipefail
+          plan=$(RSTL_SLOTS=16 bash .github/scripts/enumerate.sh)
+          while IFS= read -r line; do
+            key=${line%%=*}
+            echo "${key}=${line#*=}" >> "$GITHUB_OUTPUT"
+          done <<< "$plan"
+      - name: Log plan
+        run: |
+          echo "packages: ${{ steps.plan.outputs.packages_json }}"
+          echo "shards:   ${{ steps.plan.outputs.shard_map_json }}"
+
+  # -------------------------------------------------------------------------
+  # build — 16 fixed worker slots; each slot builds the packages assigned to it
+  # (topo order, deps handled via gh artifact fetch when on another slot).
+  # -------------------------------------------------------------------------
   build:
+    needs: enumerate
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
       options: --user root
+    strategy:
+      matrix:
+        shard: ['0','1','2','3','4','5','6','7','8','9','10','11','12','13','14','15']
+    env:
+      BUILDER: builder
+      CARGO_HOME: ${{ github.workspace }}/.cargo
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.cargo/target
+      RUSTUP_HOME: ${{ github.workspace }}/.rustup
     steps:
       - name: Install deps
-        run: pacman -Syu --noconfirm pacman-contrib git rustup meson scdoc tllist xorgproto fcft libpulse systemd-libs libxcb libyaml pipewire pixman wayland wayland-protocols xcb-util xcb-util-cursor xcb-util-wm alsa-lib libinih polkit xdg-desktop-portal base-devel gtk-update-icon-cache
+        run: pacman -Syu --noconfirm pacman-contrib git jq github-cli rustup meson scdoc tllist xorgproto fcft libpulse systemd-libs libxcb libyaml pipewire pixman wayland wayland-protocols xcb-util xcb-util-cursor xcb-util-wm alsa-lib libinih polkit xdg-desktop-portal base-devel gtk-update-icon-cache
+
+      - uses: actions/checkout@v7
+
+      - name: Cache cargo toolchains/deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.cargo
+            ${{ github.workspace }}/.rustup
+          key: cargo-${{ matrix.shard }}-${{ hashFiles('pkgbuilds/**') }}
+          restore-keys: |
+            cargo-${{ matrix.shard }}-
+            cargo-
 
       - name: Add build user
         run: |
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-          sudo -u builder bash -c 'rustup default stable'
+          install -d -o builder -g builder "$CARGO_HOME" "$RUSTUP_HOME" "$CARGO_TARGET_DIR"
+          sudo -u builder bash -c "CARGO_HOME='$CARGO_HOME' RUSTUP_HOME='$RUSTUP_HOME' rustup default stable"
 
-      - uses: actions/checkout@v4
-
-      - name: Build packages
+      - name: Build assigned packages
+        id: pkgbuild
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+          MY_PACKAGES_JSON: ${{ needs.enumerate.outputs.packages_json }}
+          SHARD_MAP_JSON: ${{ needs.enumerate.outputs.shard_map_json }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p repo
-          declare -A built=()
-          pending() {
-            local dir pkg
-            for dir in pkgbuilds/*/; do
-              pkg=$(basename "$dir")
-              [ -n "${built[$pkg]:-}" ] || return 1
-            done
-          }
-          while ! pending; do
-            progress=0
-            for dir in pkgbuilds/*/; do
-              pkg=$(basename "$dir")
-              [ -n "${built[$pkg]:-}" ] && continue
-              readarray -t deps < <(bash -c '. "$1/PKGBUILD"; printf "%s\n" "${depends[@]:-}" "${makedepends[@]:-}"' bash "$dir" | sed '/^$/d')
-              defer_pkg=0
-              if ! pacman -T "${deps[@]}" >/dev/null 2>&1; then
-                # only defer if a missing dep is provided by another package in this repo;
-                # anything else comes from the official repos and makepkg --syncdeps will fetch it
-                for dep in "${deps[@]}"; do
-                  name=${dep%%[<>=]*}
-                  if [ -d "pkgbuilds/$name" ] && [ -z "${built[$name]:-}" ]; then
-                    defer_pkg=1
-                    break
-                  fi
-                done
-              fi
-              if [ "$defer_pkg" -eq 1 ]; then
-                echo "::group::Deferring $pkg (waiting on repo packages)"
-                echo "::endgroup::"
-                continue
-              fi
-              echo "::group::Building $pkg"
-              builddir="/tmp/build-$pkg"
-              mkdir -p "$builddir"
-              cp -a "$dir"/. "$builddir/"
-              if grep -q '^# auto:' "$builddir/PKGBUILD"; then
-                echo "Resolving latest version for $pkg"
-                bash inject.sh "$PWD" "$builddir/PKGBUILD"
-              fi
-              chown -R builder:builder "$builddir"
-              if sudo -u builder bash -c "
-                cd '$builddir'
-                makepkg --syncdeps --noconfirm --nocheck --skipchecksums --skipinteg --skippgpcheck 2>&1
-              "; then
-                pacman -U --noconfirm --needed "$builddir"/*.pkg.tar.*
-                mv "$builddir"/*.pkg.tar.* repo/
-                built[$pkg]=1
-                progress=1
-              else
-                echo "::error::$pkg failed to build"
-                exit 1
-              fi
-              rm -rf "$builddir"
-              echo "::endgroup::"
-            done
-            if [ "$progress" -eq 0 ]; then
-              for dir in pkgbuilds/*/; do
-                pkg=$(basename "$dir")
-                [ -n "${built[$pkg]:-}" ] || echo "::error::$pkg has unresolved dependencies"
-              done
+          set -euo pipefail
+          shard="${SHARD}"
+          my_shard="${SHARD_MAP_JSON}"
+          packages=()
+          deps_of=()
+          # walk the topo list; keep entries that belong to this slot
+          while IFS=$'\t' read -r pkg deps; do
+            slot=$(printf '%s' "$my_shard" | jq -r --arg p "$pkg" '.[$p] // ""')
+            if [ -z "$slot" ]; then
+              echo "::error::no slot mapping for $pkg" >&2
               exit 1
             fi
+            if [ "$slot" = "$shard" ]; then
+              packages+=("$pkg")
+              deps_of+=("$deps")
+            fi
+          done < <(printf '%s' "${MY_PACKAGES_JSON}" | jq -r '.[] | [.pkg, (.deps|join(" "))] | @tsv')
+
+          if [ "${#packages[@]}" -eq 0 ]; then
+            echo "no packages assigned to slot ${shard}"
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mkdir -p /tmp/deps
+          for idx in "${!packages[@]}"; do
+            pkg="${packages[$idx]}"
+            echo "::group::Building $pkg (slot $shard)"
+            for dep in ${deps_of[$idx]:-}; do
+              if pacman -Q "$dep" >/dev/null 2>&1; then continue; fi
+              dslot=$(printf '%s' "$my_shard" | jq -r --arg p "$dep" '.[$p] // ""')
+              if [ -z "$dslot" ]; then
+                echo "::error::$pkg needs '$dep' which has no shard assignment" >&2
+                exit 1
+              fi
+              tries=0
+              until gh run download "$GITHUB_RUN_ID" -n "shard-$dslot" -D "/tmp/deps/$dslot" 2>/dev/null; do
+                tries=$((tries + 1))
+                [ "$tries" -ge 360 ] && { echo "::error::timed out waiting for dependency '$dep' (slot $dslot)" >&2; exit 1; }
+                sleep 10
+              done
+              pacman -U --noconfirm --needed $(find "/tmp/deps/$dslot" -type f -name '*.pkg.tar.*')
+            done
+            bash .github/scripts/build-pkg.sh "$pkg"
+            echo "::endgroup::"
           done
+          echo "count=${#packages[@]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload slot artifacts
+        if: ${{ steps.pkgbuild.outputs.count != '0' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: shard-${{ matrix.shard }}
+          path: out/**/*.pkg.tar.*
+          retention-days: 1
+
+  # -------------------------------------------------------------------------
+  # assemble — collect every slot's packages, write the repo db, generate the
+  # static site and hand the tree to the Pages deploy.
+  # -------------------------------------------------------------------------
+  assemble:
+    needs: [enumerate, build]
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+      options: --user root
+    steps:
+      - name: Collect packages
+        uses: actions/download-artifact@v5
+        with:
+          pattern: shard-*
+          path: /tmp/repo
+          merge-multiple: true
+
+      - name: Flatten packages into repo/
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/repo-flat
+          find /tmp/repo -mindepth 1 -type f -name '*.pkg.tar.*' -exec mv -t /tmp/repo-flat {} +
+          rm -rf /tmp/repo
+          mv /tmp/repo-flat /tmp/repo
+          ls -1 /tmp/repo
 
       - name: Create repo database
         run: |
-          chown -R builder:builder repo
-          sudo -u builder bash -c "
-            cd repo
-            repo-add rstl-repo.db.tar.gz *.pkg.tar.*
-          "
+          cd /tmp/repo
+          repo-add -n rstl-repo.db.tar.gz *.pkg.tar.*
 
       - name: Generate site
         run: |
           set -euo pipefail
-          cd repo
+          cd /tmp/repo
           total=$(ls *.pkg.tar.* 2>/dev/null | wc -l)
           {
             echo '<!DOCTYPE html>'
@@ -154,10 +223,10 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: repo
+          path: /tmp/repo
 
   deploy:
-    needs: build
+    needs: assemble
     runs-on: ubuntu-latest
     environment:
       name: github-pages

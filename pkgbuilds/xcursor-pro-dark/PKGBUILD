@@ -1,0 +1,40 @@
+# Maintainer: rustle
+pkgname=xcursor-pro-dark
+pkgver=2.0.2
+pkgrel=1
+pkgdesc="Modern X11 Cursor Theme — dark only (trimmed from xcursor-pro-cursor-theme)"
+arch=('any')
+url="https://github.com/ful1e5/XCursor-pro"
+license=('GPL-3.0-or-later')
+depends=()
+makedepends=('python-clickgen>=2.0.0')
+provides=(xcursor-pro-cursor-theme)
+conflicts=(xcursor-pro-cursor-theme)
+options=('!strip')
+# auto: release
+source=("xcursor-pro-cursor-theme-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz"
+        "xcursor-pro-cursor-theme-$pkgver-bitmaps.zip::$url/releases/download/v$pkgver/bitmaps.zip")
+noextract=("xcursor-pro-cursor-theme-$pkgver-bitmaps.zip")
+sha256sums=('5baf8557e6cd0504540c258ada32898358e9aaa77d95e0e0f460bad494078445'
+            'b6549857dfe5062f42551efccaeded9aee8703a9c41510ba59c20414c38ac84b')
+
+prepare() {
+  bsdtar xvf "xcursor-pro-cursor-theme-$pkgver-bitmaps.zip" -C "XCursor-pro-$pkgver"
+
+  cd "XCursor-pro-$pkgver"
+  rm -rf themes bin
+}
+
+build() {
+  cd "XCursor-pro-$pkgver"
+
+  _version="v$pkgver"
+  ctgen "configs/x.build.toml" -p x11 -d "bitmaps/XCursor-Pro-Dark" \
+    -n "XCursor-Pro-Dark" -c "Modern, Professional Dark (${_version}) XCursors"
+}
+
+package() {
+  cd "XCursor-pro-$pkgver"
+  install -d "$pkgdir/usr/share/icons"
+  cp -r themes/XCursor-Pro-Dark "$pkgdir/usr/share/icons/"
+}
