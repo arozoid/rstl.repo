@@ -14,6 +14,7 @@ source=("$pkgname-$pkgver.zip::$url/releases/download/v$pkgver/rovr-linux-x64-nu
 sha256sums=('SKIP')
 
 package() {
+  mkdir -p "$pkgdir/opt/rovr"
   unzip -q "$pkgname-$pkgver.zip" -d "$pkgdir/opt/rovr"
   install -Dm755 /dev/stdin "$pkgdir/usr/bin/rovr" <<END
 #!/usr/bin/env sh
