@@ -100,76 +100,76 @@ jobs:
           MY_PACKAGES_JSON: ${{ needs.enumerate.outputs.packages_json }}
           SHARD_MAP_JSON: ${{ needs.enumerate.outputs.shard_map_json }}
           GH_TOKEN: ${{ github.token }}
-run: |
-      set -euo pipefail
-      shard="${SHARD}"
-      my_shard="${SHARD_MAP_JSON}"
-      packages=()
-      deps_of=()
-      # walk the topo list; keep entries that belong to this slot
-      while IFS=$'\t' read -r pkg deps; do
-        slot=$(printf '%s' "$my_shard" | jq -r --arg p "$pkg" '.[$p] // ""')
-        if [ -z "$slot" ]; then
-          echo "::error::no slot mapping for $pkg" >&2
-          exit 1
-        fi
-        if [ "$slot" = "$shard" ]; then
-          packages+=("$pkg")
-          deps_of+=("$deps")
-        fi
-      done < <(printf '%s' "${MY_PACKAGES_JSON}" | jq -r '.[] | [.pkg, (.deps|join(" "))] | @tsv')
-
-      if [ "${#packages[@]}" -eq 0 ]; then
-        echo "no packages assigned to slot ${shard}"
-        echo "count=0" >> "$GITHUB_OUTPUT"
-        exit 0
-      fi
-
-      mkdir -p /tmp/deps
-      for idx in "${!packages[@]}"; do
-        pkg="${packages[$idx]}"
-        echo "::group::Building $pkg (slot $shard)"
-        for dep in ${deps_of[$idx]:-}; do
-          if pacman -Q "$dep" >/dev/null 2>&1; then continue; fi
-          dslot=$(printf '%s' "$my_shard" | jq -r --arg p "$dep" '.[$p] // ""')
-          if [ -z "$dslot" ]; then
-            echo "::error::$pkg needs '$dep' which has no shard assignment" >&2
-            exit 1
-          fi
-          echo "::group::gh debug (bug:deps)"
-          gh auth status 2>&1 | head -6
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" --jq '[.artifacts[].name] | join(",")' 2>&1 | head -3
-          echo "::endgroup::"
-          dl_err="$(mktemp)"
-          dest="/tmp/deps/$dslot"
-          tries=0
-          while :; do
-            aid=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
-                  --jq ".artifacts[] | select(.name == \"shard-$dslot\") | .id" 2>"$dl_err" | head -1)
-            if [ -n "$aid" ] && gh api -H "Accept: application/vnd.github+json" \
-                "repos/${GITHUB_REPOSITORY}/actions/artifacts/${aid}/zip" > "${dest}.zip" 2>"$dl_err"; then
-              break
-            fi
-            tries=$((tries + 1))
-            if [ "$tries" -ge 360 ]; then
-              echo "::error::timed out fetching shard-$dslot ($dep): $(tail -c 500 "$dl_err")" >&2
+        run: |
+          set -euo pipefail
+          shard="${SHARD}"
+          my_shard="${SHARD_MAP_JSON}"
+          packages=()
+          deps_of=()
+          # walk the topo list; keep entries that belong to this slot
+          while IFS=$'\t' read -r pkg deps; do
+            slot=$(printf '%s' "$my_shard" | jq -r --arg p "$pkg" '.[$p] // ""')
+            if [ -z "$slot" ]; then
+              echo "::error::no slot mapping for $pkg" >&2
               exit 1
             fi
-            if [ $((tries % 6)) -eq 0 ]; then
-              echo "::warning::waiting for shard-$dslot ($dep) — ${tries}0s: $(tail -c 500 "$dl_err")" >&2
+            if [ "$slot" = "$shard" ]; then
+              packages+=("$pkg")
+              deps_of+=("$deps")
             fi
-            sleep 10
-            : > "$dl_err"
+          done < <(printf '%s' "${MY_PACKAGES_JSON}" | jq -r '.[] | [.pkg, (.deps|join(" "))] | @tsv')
+
+          if [ "${#packages[@]}" -eq 0 ]; then
+            echo "no packages assigned to slot ${shard}"
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mkdir -p /tmp/deps
+          for idx in "${!packages[@]}"; do
+            pkg="${packages[$idx]}"
+            echo "::group::Building $pkg (slot $shard)"
+            for dep in ${deps_of[$idx]:-}; do
+              if pacman -Q "$dep" >/dev/null 2>&1; then continue; fi
+              dslot=$(printf '%s' "$my_shard" | jq -r --arg p "$dep" '.[$p] // ""')
+              if [ -z "$dslot" ]; then
+                echo "::error::$pkg needs '$dep' which has no shard assignment" >&2
+                exit 1
+              fi
+              echo "::group::gh debug (bug:deps)"
+              gh auth status 2>&1 | head -6
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" --jq '[.artifacts[].name] | join(",")' 2>&1 | head -3
+              echo "::endgroup::"
+              dl_err="$(mktemp)"
+              dest="/tmp/deps/$dslot"
+              tries=0
+              while :; do
+                aid=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+                      --jq ".artifacts[] | select(.name == \"shard-$dslot\") | .id" 2>"$dl_err" | head -1)
+                if [ -n "$aid" ] && gh api -H "Accept: application/vnd.github+json" \
+                    "repos/${GITHUB_REPOSITORY}/actions/artifacts/${aid}/zip" > "${dest}.zip" 2>"$dl_err"; then
+                  break
+                fi
+                tries=$((tries + 1))
+                if [ "$tries" -ge 360 ]; then
+                  echo "::error::timed out fetching shard-$dslot ($dep): $(tail -c 500 "$dl_err")" >&2
+                  exit 1
+                fi
+                if [ $((tries % 6)) -eq 0 ]; then
+                  echo "::warning::waiting for shard-$dslot ($dep) — ${tries}0s: $(tail -c 500 "$dl_err")" >&2
+                fi
+                sleep 10
+                : > "$dl_err"
+              done
+              mkdir -p "$dest"
+              bsdtar -xf "${dest}.zip" -C "$dest"
+              rm -f "${dest}.zip"
+              pacman -U --noconfirm --needed $(find "$dest" -type f -name '*.pkg.tar.*')
+            done
+            bash .github/scripts/build-pkg.sh "$pkg"
+            echo "::endgroup::"
           done
-          mkdir -p "$dest"
-          bsdtar -xf "${dest}.zip" -C "$dest"
-          rm -f "${dest}.zip"
-          pacman -U --noconfirm --needed $(find "$dest" -type f -name '*.pkg.tar.*')
-        done
-        bash .github/scripts/build-pkg.sh "$pkg"
-        echo "::endgroup::"
-      done
-      echo "count=${#packages[@]}" >> "$GITHUB_OUTPUT"
+          echo "count=${#packages[@]}" >> "$GITHUB_OUTPUT"
 
       - name: Upload slot artifacts
         if: ${{ steps.pkgbuild.outputs.count != '0' }}
