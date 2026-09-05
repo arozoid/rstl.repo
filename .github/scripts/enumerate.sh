@@ -61,46 +61,82 @@ while [ "${#order[@]}" -lt "${#pkgs[@]}" ]; do
   fi
 done
 
-# contiguous shards over the topo order; a dependency always precedes its users,
-# so any cross-shard fetch targets an earlier shard
-size=$(( (${#order[@]} + slots - 1) / slots ))   # packages per slot
-[ "$size" -gt 0 ] || { echo 'packages_json=[]'; echo 'shard_map_json={}'; echo "slots=$slots"; exit 0; }
+# shard assignment — spread packages out instead of bunching related ones:
+#   + at most MAX_PER_SLOT packages per slot (best effort)
+#   + packages with related in-repo dependencies (share a dep, or one needs the
+#     other) are pushed to different slots whenever a low-cost slot exists
+#   + round-robin start from the topo index keeps the load balanced
+max_per_slot=${MAX_PER_SLOT:-3}
+
+# related[pkg] = everyone "similar" to pkg: its in-repo deps, everyone that
+# depends on it, and everyone sharing any of its deps.
+declare -A related
+for p in "${order[@]}"; do
+  list=" ${deps_of[$p]:-} "
+  for q in "${order[@]}"; do
+    [ "$q" = "$p" ] && continue
+    case " ${deps_of[$q]:-} " in
+      *" $p "*) list+=" $q " ;;
+    esac
+  done
+  for d in ${deps_of[$p]:-}; do
+    for q in "${order[@]}"; do
+      [ "$q" = "$p" ] && continue
+      case " ${deps_of[$q]:-} " in
+        *" $d "*) list+=" $q " ;;
+      esac
+    done
+  done
+  related[$p]=$list
+done
+
+declare -A shard_of slot_pkgs slot_count
+for i in "${!order[@]}"; do
+  p="${order[$i]}"
+  start=$(( i % slots ))
+  pick=""
+  pickcost=999
+  for (( k=0; k<slots; k++ )); do
+    n=$(( (start + k) % slots ))
+    [ "${slot_count[$n]:-0}" -lt "$max_per_slot" ] || continue
+    cost=0
+    for q in ${related[$p]:-}; do
+      case " ${slot_pkgs[$n]:-} " in
+        *" $q "*) cost=$((cost + 1)) ;;
+      esac
+    done
+    if [ "$cost" -lt "$pickcost" ]; then
+      pickcost=$cost
+      pick=$n
+      [ "$cost" -eq 0 ] && break
+    fi
+  done
+  [ -n "$pick" ] || { echo "enumerate.sh: no slot with capacity for $p" >&2; exit 1; }
+  shard_of[$p]=$pick
+  slot_pkgs[$pick]="${slot_pkgs[$pick]:-} $p "
+  slot_count[$pick]=$(( ${slot_count[$pick]:-0} + 1 ))
+done
 
 packages_json='['
 shard_map_json='{'
-sn=0
-i=0
-for (( n=0; n<slots; n++ )); do
-  if [ "$i" -ge "${#order[@]}" ]; then break; fi
-  [ "$n" -eq 0 ] || { packages_json+=','; shard_map_json+=','; }
-  packages_json+='{'
-  pkgn=$(json_str "${order[$i]}")
-  packages_json+="\"pkg\":\"$pkgn\",\"deps\":["
+first_pkg=1
+for p in "${order[@]}"; do
+  [ "$first_pkg" -eq 1 ] || { packages_json+=','; shard_map_json+=','; }
+  packages_json+="{\"pkg\":\"$(json_str "$p")\",\"deps\":["
   first=1
-  for d in ${deps_of[${order[$i]}]:-}; do
+  for d in ${deps_of[$p]:-}; do
     [ "$first" -eq 1 ] || packages_json+=','
     packages_json+="\"$(json_str "$d")\""
     first=0
   done
   packages_json+=']}'
-  shard_map_json+="\"$pkgn\":\"$sn\""
-  sn=$((sn+1))
-  for (( c=1; c<size && i<${#order[@]}; c++ )); do
-    i=$((i+1))
-    [ "$i" -ge "${#order[@]}" ] && break
-    pkgn=$(json_str "${order[$i]}")
-    packages_json+=',{"pkg":"'$pkgn'","deps":['
-    first=1
-    for d in ${deps_of[${order[$i]}]:-}; do
-      [ "$first" -eq 1 ] || packages_json+=','
-      packages_json+="\"$(json_str "$d")\""
-      first=0
-    done
-    packages_json+=']}'
-    shard_map_json+=",\"$pkgn\":\"$sn\""
-  done
-  i=$((i+1))
+  shard_map_json+="\"$(json_str "$p")\":\"${shard_of[$p]}\""
+  first_pkg=0
 done
+if [ "${#order[@]}" -eq 0 ]; then
+  packages_json='[]'
+  shard_map_json='{}'
+fi
 packages_json+=']'
 shard_map_json+='}'
 
