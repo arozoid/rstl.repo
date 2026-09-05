@@ -20,6 +20,6 @@ build() {
 
 package() {
   cd "$srcdir/$pkgname-$_commit"
-  install -Dm755 target/release/xeon "$pkgdir/usr/bin/xeon"
+  install -Dm755 "${CARGO_TARGET_DIR:-target}/release/xeon" "$pkgdir/usr/bin/xeon"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
 }
