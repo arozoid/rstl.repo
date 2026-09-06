@@ -42,9 +42,9 @@ case "$mode" in
     esac
     # Gather version-like tags, then pick the highest by numeric version sort.
     # Tags may carry a Python-style ".postN" suffix (e.g. 0.10.1.post1).
-    # Dotted versions win: some upstreams also push bare-numeric git/timestamp
-    # tags (e.g. phinger-cursors ships "1410987542" style tags) which must not
-    # outrank real releases like 2.1, so bare numbers are only a last resort.
+    # Dotted versions win: some upstreams push bare-numeric git/timestamp
+    # tags (e.g. 1410987542 style) which must not outrank real releases
+    # like 2.1, so bare numbers are only a last resort.
     dotted=() bare=()
     while IFS= read -r tag; do
       [ -z "$tag" ] && continue

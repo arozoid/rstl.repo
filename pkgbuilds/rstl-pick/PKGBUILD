@@ -1,7 +1,7 @@
 # Maintainer: rustle
 pkgname=rstl-pick
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="Compact fuzzy-search TUI app picker for the rstl.sway desktop"
 arch=(x86_64)
 url="https://github.com/arozoid/rstl-pick"
@@ -15,6 +15,9 @@ sha256sums=('SKIP')
 
 build() {
   cd "$pkgname-$pkgver"
+  # the released tarball's Cargo.lock can drift from Cargo.toml; --locked
+  # refuses to regenerate it, so refresh deps first, then lock deterministically
+  cargo update
   cargo build --release --locked
 }
 
