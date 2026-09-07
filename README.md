@@ -10,7 +10,9 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `yambar`: Modular status panel (built without -Werror)
 - `ttf-jetbrains-mono-nerd-min`: JetBrains Mono Nerd Font — regular weight only (replaces `ttf-jetbrains-mono-nerd`)
 - `papirus-icon-theme-dark-only`: Papirus-Dark icon theme only (replaces `papirus-icon-theme`)
+- `adwaita-icon-theme-dark`: GNOME standard Adwaita icons (dark-capable) without the `adwaita-cursors` dependency
 - `xcursor-pro-dark`: Modern Professional Dark cursor theme only (replaces `xcursor-pro-cursor-theme`)
+- `notwaita-cursors-grey`: Grey Notwaita cursor theme — Adwaita-inspired, HiDPI (grey only)
 - `python-clickgen`: X11 & Windows cursor building API (build dep of `xcursor-pro-dark`)
 
 - `bluetuith`: TUI-based bluetooth connection manager
@@ -23,6 +25,8 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `oxicord`: Vim-native Discord TUI client
 - `concord-bin`: Feature-rich TUI client for Discord (prebuilt binary)
 - `rovr-bin`: Post-modern terminal file explorer (Nuitka binary)
+- `fzf-tab`: Replace zsh's default completion selection menu with fzf
+- `zsh-auto-notify`: Automatic notification when a long-running command finishes
 
 Packages auto-track their upstream: repos with releases use the latest release tag as the version (e.g. `3.5.1`); repos without releases use `YYYYMMDD`. `resolve.sh` + `inject.sh` patch the PKGBUILD at build time, so a scheduled build picks up new upstream versions automatically — no manual bumps needed.
 

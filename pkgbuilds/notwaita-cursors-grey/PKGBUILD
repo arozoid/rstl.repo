@@ -1,0 +1,17 @@
+# Maintainer: arozoid
+pkgname=notwaita-cursors-grey
+_release=1.0.0-alpha1
+pkgver=${_release//-/.}
+pkgrel=1
+pkgdesc="Grey Notwaita cursor theme - Adwaita-inspired, HiDPI (grey only)"
+arch=(any)
+url="https://github.com/ful1e5/notwaita-cursor"
+license=(custom)
+depends=(hicolor-icon-theme)
+source=("$pkgname-$pkgver.tar.xz::$url/releases/download/v$_release/Notwaita-Gray.tar.xz")
+sha256sums=('SKIP')
+
+package() {
+  install -d "$pkgdir/usr/share/icons"
+  tar -xJf "$srcdir/$pkgname-$pkgver.tar.xz" -C "$pkgdir/usr/share/icons"
+}

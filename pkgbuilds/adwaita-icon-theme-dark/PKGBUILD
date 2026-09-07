@@ -1,0 +1,23 @@
+# Maintainer: arozoid
+pkgname=adwaita-icon-theme-dark
+pkgver=50.0
+pkgrel=1
+pkgdesc="GNOME standard icons (dark-capable Adwaita), bundled without the adwaita-cursors dependency"
+arch=(any)
+url="https://gitlab.gnome.org/GNOME/adwaita-icon-theme"
+license=(CC-BY-SA-3.0)
+depends=(hicolor-icon-theme gtk-update-icon-cache librsvg)
+makedepends=(meson gtk-update-icon-cache)
+source=("$pkgname-$pkgver.tar.gz::https://gitlab.gnome.org/GNOME/adwaita-icon-theme/-/archive/$pkgver/adwaita-icon-theme-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$srcdir/adwaita-icon-theme-$pkgver"
+  meson setup build --prefix=/usr
+  ninja -C build
+}
+
+package() {
+  DESTDIR="$pkgdir" meson install -C "$srcdir/adwaita-icon-theme-$pkgver/build"
+  rm -rf "$pkgdir/usr/share/icons/Adwaita/cursors"
+}
