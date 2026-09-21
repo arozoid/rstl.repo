@@ -1,0 +1,32 @@
+# Maintainer: rustle
+pkgname=concord
+pkgver=2.5.22
+pkgrel=1
+pkgdesc="A feature-rich TUI client for Discord"
+arch=(x86_64)
+url="https://github.com/chojs23/concord"
+license=(GPL-3.0-only)
+depends=(glibc libgcc libstdc++ alsa-lib libpipewire libva)
+makedepends=(rustup clang cmake nasm)
+optdepends=('mpv: video/audio playback support')
+options=(!lto)
+# auto: release
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  cargo fetch --locked
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  # default features = voice-playback (calls) + stream-broadcast (screen share)
+  cargo build --frozen --release
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 "${CARGO_TARGET_DIR:-target}/release/concord" "$pkgdir/usr/bin/concord"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
+}

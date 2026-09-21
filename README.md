@@ -23,7 +23,7 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `xeon`: The 'modern' package manager for `.xeo` packages
 - `calawk`: Small interactive expression calculator wrapper around awk
 - `oxicord`: Vim-native Discord TUI client
-- `concord-bin`: Feature-rich TUI client for Discord (prebuilt binary)
+- `concord`: Feature-rich TUI client for Discord (built from source; voice calls & screen share included)
 - `rovr-bin`: Post-modern terminal file explorer (Nuitka binary)
 - `fzf-tab`: Replace zsh's default completion selection menu with fzf
 - `zsh-auto-notify`: Automatic notification when a long-running command finishes
