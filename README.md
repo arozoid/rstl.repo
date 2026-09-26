@@ -14,6 +14,7 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `xcursor-pro-dark`: Modern Professional Dark cursor theme only (replaces `xcursor-pro-cursor-theme`)
 - `notwaita-cursors-grey`: Grey Notwaita cursor theme — Adwaita-inspired, HiDPI (grey only)
 - `python-clickgen`: X11 & Windows cursor building API (build dep of `xcursor-pro-dark`)
+- `python-yewtube-search-python`: Search for YouTube videos/channels/playlists without the Data API (runtime dep of `yewtube`)
 
 - `bluetuith`: TUI-based bluetooth connection manager
 - `clipse`: Configurable TUI clipboard manager for Unix
@@ -25,10 +26,13 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `oxicord`: Vim-native Discord TUI client
 - `concord`: Feature-rich TUI client for Discord (built from source; voice calls & screen share included)
 - `rovr-bin`: Post-modern terminal file explorer (Nuitka binary)
+- `yewtube`: Terminal-based YouTube player and downloader
+- `myx`: Lean, beautiful terminal Spotify player
+- `chroncal`: Terminal-first calendar, todo and journal manager
 - `fzf-tab`: Replace zsh's default completion selection menu with fzf
 - `zsh-auto-notify`: Automatic notification when a long-running command finishes
 
-Packages auto-track their upstream: repos with releases use the latest release tag as the version (e.g. `3.5.1`); repos without releases use `YYYYMMDD`. `resolve.sh` + `inject.sh` patch the PKGBUILD at build time, so a scheduled build picks up new upstream versions automatically — no manual bumps needed.
+Packages auto-track their upstream: repos with releases use the latest release tag as the version (e.g. `3.5.1`); repos without releases use `YYYYMMDD`. `resolve.sh` + `inject.sh` patch the PKGBUILD at build time, so a scheduled build picks up new upstream versions automatically — no manual bumps needed. A few packages are pinned instead (no `# auto:` marker) because an auto-track version cannot resolve correctly, e.g. `calawk` and `python-yewtube-search-python`.
 
 ## usage
 
