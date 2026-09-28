@@ -1,6 +1,6 @@
 # Maintainer: rustle
 pkgname=rstl-pick
-pkgver=2.1.2
+pkgver=2.2.0
 pkgrel=1
 pkgdesc="Compact fuzzy-search TUI app picker for the rstl.sway desktop"
 arch=(x86_64)
