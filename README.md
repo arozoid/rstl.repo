@@ -25,12 +25,22 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `calawk`: Small interactive expression calculator wrapper around awk
 - `oxicord`: Vim-native Discord TUI client
 - `concord`: Feature-rich TUI client for Discord (built from source; voice calls & screen share included)
-- `rovr-bin`: Post-modern terminal file explorer (Nuitka binary)
+- `rovr`: Post-modern terminal file explorer (Nuitka binary)
 - `yewtube`: Terminal-based YouTube player and downloader
 - `myx`: Lean, beautiful terminal Spotify player
 - `chroncal`: Terminal-first calendar, todo and journal manager
 - `fzf-tab`: Replace zsh's default completion selection menu with fzf
 - `zsh-auto-notify`: Automatic notification when a long-running command finishes
+- `vectorcraft`: Vector illustration; an open-source, clean-room reimplementation of Adobe Illustrator, rebuilt in pure Rust
+- `filmcraft`: Video editing, color and sound; an open-source, clean-room reimplementation of Adobe Premiere Pro, rebuilt in pure Rust
+- `photocraft`: Image editing; an open-source, clean-room reimplementation of Adobe Photoshop, rebuilt in pure Rust
+- `pdfcraft`: The PDF workbench; an open-source, clean-room reimplementation of Adobe Acrobat, rebuilt in pure Rust
+- `lightcraft`: Photo library and raw development; an open-source, clean-room reimplementation of Adobe Lightroom, rebuilt in pure Rust
+- `designcraft`: Page layout and publishing; an open-source, clean-room reimplementation of Adobe InDesign, rebuilt in pure Rust
+- `effectcraft`: Motion graphics and visual effects; an open-source, clean-room reimplementation of Adobe After Effects, rebuilt in pure Rust
+- `wordcraft`: Writing and document design; an open-source, clean-room reimplementation of Microsoft Word, rebuilt in pure Rust
+- `gridcraft`: Spreadsheets and data; an open-source, clean-room reimplementation of Microsoft Excel, rebuilt in pure Rust
+- `deckcraft`: Presentations and slide shows; an open-source, clean-room reimplementation of Microsoft PowerPoint, rebuilt in pure Rust
 
 Packages auto-track their upstream: repos with releases use the latest release tag as the version (e.g. `3.5.1`); repos without releases use `YYYYMMDD`. `resolve.sh` + `inject.sh` patch the PKGBUILD at build time, so a scheduled build picks up new upstream versions automatically — no manual bumps needed. A few packages are pinned instead (no `# auto:` marker) because an auto-track version cannot resolve correctly, e.g. `calawk` and `python-yewtube-search-python`.
 
