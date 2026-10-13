@@ -1,6 +1,6 @@
 # Maintainer: rustle
 pkgname=gridcraft
-pkgver=0.4.0
+pkgver=0.6.1
 pkgrel=1
 pkgdesc="Spreadsheets and data; an open-source, clean-room reimplementation of Microsoft Excel, rebuilt in pure Rust"
 arch=(x86_64)

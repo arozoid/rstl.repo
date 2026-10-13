@@ -1,6 +1,6 @@
 # Maintainer: rustle
 pkgname=designcraft
-pkgver=0.5.0
+pkgver=0.7.1
 pkgrel=1
 pkgdesc="Page layout and publishing; an open-source, clean-room reimplementation of Adobe InDesign, rebuilt in pure Rust"
 arch=(x86_64)

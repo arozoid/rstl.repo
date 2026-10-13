@@ -1,6 +1,6 @@
 # Maintainer: rustle
 pkgname=pdfcraft
-pkgver=0.5.0
+pkgver=0.7.1
 pkgrel=1
 pkgdesc="The PDF workbench; an open-source, clean-room reimplementation of Adobe Acrobat, rebuilt in pure Rust"
 arch=(x86_64)

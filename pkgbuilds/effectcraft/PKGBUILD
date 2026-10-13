@@ -1,6 +1,6 @@
 # Maintainer: rustle
 pkgname=effectcraft
-pkgver=0.7.0
+pkgver=0.9.2
 pkgrel=1
 pkgdesc="Motion graphics and visual effects; an open-source, clean-room reimplementation of Adobe After Effects, rebuilt in pure Rust"
 arch=(x86_64)
