@@ -180,11 +180,78 @@ jobs:
           retention-days: 1
 
   # -------------------------------------------------------------------------
+  # rpm — mirror the finished Arch packages as Fedora RPMs (pkg2rpm.sh reads
+  # metadata from the built .pkg.tar.*), build python-toml (not packaged by
+  # Fedora anymore) and publish a createrepo_c dnf repo alongside the pacman
+  # repo. Runs parallel to assemble; assemble waits for it and picks the
+  # result up as fedora/.
+  # -------------------------------------------------------------------------
+  rpm:
+    needs: [enumerate, build]
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install tools
+        run: >-
+          dnf -y install rpm-build zstd libarchive createrepo_c
+          python3-devel python3-build python3-installer python3-wheel
+          python3-setuptools
+
+      - name: Collect packages
+        uses: actions/download-artifact@v5
+        with:
+          pattern: shard-*
+          path: /tmp/arch
+          merge-multiple: true
+
+      - name: Flatten packages
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/flat /tmp/rpms
+          find /tmp/arch -mindepth 1 -type f -name '*.pkg.tar.*' -exec mv -t /tmp/flat {} +
+          echo "collected: $(ls -1 /tmp/flat | wc -l) packages"
+
+      - name: Build python-toml
+        run: |
+          set -euo pipefail
+          rpmbuild -bb specs/python-toml.spec --define "_topdir /tmp/toml-build"
+          cp /tmp/toml-build/RPMS/noarch/*.rpm /tmp/rpms/
+
+      - name: Convert packages to RPM
+        run: |
+          set -euo pipefail
+          for p in /tmp/flat/*.pkg.tar.*; do
+            bash .github/scripts/pkg2rpm.sh "$p" /tmp/rpms
+          done
+
+      - name: Create repo metadata
+        run: |
+          set -euo pipefail
+          createrepo_c /tmp/rpms
+          printf '%s\n' \
+            '[rstl]' \
+            'name=rstl.repo' \
+            'baseurl=https://arozoid.github.io/rstl.repo/fedora' \
+            'enabled=1' \
+            'gpgcheck=0' > /tmp/rpms/rstl.repo
+
+      - name: Smoke test — dnf must resolve every package
+        run: dnf -y install /tmp/rpms/*.rpm
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: rpm-repo
+          path: /tmp/rpms
+          retention-days: 1
+
+  # -------------------------------------------------------------------------
   # assemble — collect every slot's packages, write the repo db, generate the
   # static site and hand the tree to the Pages deploy.
   # -------------------------------------------------------------------------
   assemble:
-    needs: [enumerate, build]
+    needs: [enumerate, build, rpm]
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
@@ -210,6 +277,12 @@ jobs:
           rm -rf /tmp/repo
           mv /tmp/repo-flat /tmp/repo
           ls -1 /tmp/repo
+
+      - name: Collect RPM repo
+        uses: actions/download-artifact@v5
+        with:
+          name: rpm-repo
+          path: /tmp/repo/fedora
 
       - name: Create repo database
         run: |

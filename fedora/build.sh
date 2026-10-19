@@ -1,77 +1,96 @@
 #!/usr/bin/env bash
-# build.sh — build Fedora RPMs for rstl.repo.
+# build.sh — Build Fedora RPMs and generate repository metadata for rstl.repo.
 #
-# Builds .spec files in fedora/specs/<pkg>/<pkg>.spec using rpmbuild.
-# Sources are fetched from the URLs defined in each spec file.
+# This script is designed to run on a Fedora system with rpmbuild and
+# createrepo_c installed. It builds .spec files in fedora/specs/<pkg>/
+# into binary RPMs, then generates repodata (repomd.xml, primary.xml,
+# filelists.xml, other.xml) so the result is a usable DNF/YUM repository.
 #
-# Usage: ./build.sh [pkg1 pkg2 ...]
-#   With no arguments, builds all packages.
+# Usage:
+#   ./build.sh              # build all packages
+#   ./build.sh vectorcraft  # build one package
+#   ./build.sh --repo-only  # just regenerate repodata from existing RPMs
+#
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-RPMDIR="$REPO_DIR/rpms"
-SPECS_DIR="$REPO_DIR/fedora/specs"
+SPECS_DIR="$REPO_DIR/specs"
+RPMS_DIR="$REPO_DIR/Packages"
+REPODATA_DIR="$REPO_DIR/repodata"
+SRPMS_DIR="$REPO_DIR/SRPMS"
 
-mkdir -p "$RPMDIR"
+mkdir -p "$RPMS_DIR" "$REPODATA_DIR" "$SRPMS_DIR"
 
-# Use rpmbuild if available, otherwise document what to do
-if ! command -v rpmbuild &>/dev/null; then
-  echo "ERROR: rpmbuild not found. Install rpm-build package to build Fedora RPMs." >&2
-  echo "  sudo dnf install rpm-build" >&2
-  exit 1
-fi
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-# Set up rpmbuild directory structure
-RPMTOP="${RPMTOP:-$HOME/rpmbuild}"
-mkdir -p "$RPMTOP"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+have_rpmbuild() { command -v rpmbuild >/dev/null 2>&1; }
+have_createrepo() { command -v createrepo_c >/dev/null 2>&1 || command -v createrepo >/dev/null 2>&1; }
 
-# Copy spec files and sources into rpmbuild tree
-build_pkg() {
+# Build one RPM package from its spec file.
+build_one() {
   local pkg="$1"
-  local spec_dir="$SPECS_DIR/$pkg"
-  local spec_file="$spec_dir/$pkg.spec"
+  local spec_file="$SPECS_DIR/$pkg/$pkg.spec"
 
   if [ ! -f "$spec_file" ]; then
-    echo "==> Skipping $pkg: no spec file at $spec_file" >&2
+    echo "WARNING: no spec file for $pkg at $spec_file" >&2
     return 1
   fi
 
   echo "==> Building $pkg"
-  cp "$spec_file" "$RPMTOP/SPECS/"
-
-  # Download sources if they aren't already present
-  # (In a real build, sources come from the Fedora lookaside cache)
-  cd "$RPMTOP/SOURCES"
-  while IFS= read -r line; do
-    # Skip comments and non-Source lines
-    [[ "$line" =~ ^Source[0-9]+: ]] || continue
-    local src_url="${line#*: }"
-    local src_name="${src_url##*/}"
-    if [ ! -f "$src_name" ]; then
-      echo "    Downloading $src_name"
-      curl -fsSL -O "$src_url" || echo "    WARNING: failed to download $src_name" >&2
-    fi
-  done < "$spec_file"
-  cd "$REPO_DIR"
-
-  rpmbuild -ba --define "_topdir $RPMTOP" "$RPMTOP/SPECS/$pkg.spec"
-
-  # Copy built RPMs to repo dir
-  find "$RPMROOT/RPMS" -name "*.rpm" -exec cp {} "$RPMDIR/" \; 2>/dev/null || true
+  rpmbuild -ba \
+    --define "_topdir $REPO_DIR/rpmbuild" \
+    --define "_rpmdir $RPMS_DIR" \
+    --define "_srcrpmdir $SRPMS_DIR" \
+    --define "_builddir $REPO_DIR/rpmbuild/BUILD" \
+    "$spec_file"
 
   echo "==> Built $pkg"
 }
 
+# Regenerate repodata from existing RPMs.
+repo_only() {
+  echo "==> Generating repodata from existing RPMs"
+  if command -v python3 >/dev/null 2>&1; then
+    python3 "$REPO_DIR/generate_repo.py" "$REPO_DIR/x86_64"
+  else
+    echo "ERROR: python3 not found, cannot generate repodata" >&2
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+if [ "${1:-}" = "--repo-only" ]; then
+  repo_only
+  exit 0
+fi
+
+if ! have_rpmbuild; then
+  echo "ERROR: rpmbuild not found. Install rpm-build to build RPMs:" >&2
+  echo "  sudo dnf install rpm-build" >&2
+  echo "" >&2
+  echo "You can still regenerate repodata from existing RPMs with:" >&2
+  echo "  ./build.sh --repo-only" >&2
+  exit 1
+fi
+
+# Build all or specific packages
 if [ $# -gt 0 ]; then
   for pkg in "$@"; do
-    build_pkg "$pkg"
+    build_one "$pkg"
   done
 else
   for d in "$SPECS_DIR"/*/; do
     pkg=$(basename "$d")
-    build_pkg "$pkg"
+    build_one "$pkg"
   done
 fi
 
-echo "==> Done. RPMs in $RPMDIR"
-ls -lh "$RPMDIR" 2>/dev/null || true
+# Regenerate repodata after building
+repo_only
+
+echo "==> Done. RPMs in $RPMS_DIR, repodata in $REPODATA_DIR"

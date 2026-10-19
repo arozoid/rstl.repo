@@ -7,13 +7,75 @@ built alongside the Arch Linux `pacman` repository.
 
 ```
 fedora/
-├── pkgs/<pkgname>/PKGBUILD   # Arch-style PKGBUILD (reference/build metadata)
+├── pkgs/<pkgname>/PKGBUILD          # Arch-style PKGBUILD (reference/build metadata)
 ├── specs/<pkgname>/<pkgname>.spec   # Fedora RPM spec file
-├── build.sh                  # Build RPMs from spec files
-└── README.md                 # This file
+├── x86_64/
+│   ├── Packages/                    # Built .rpm files go here
+│   └── repodata/                    # repomd.xml, primary.xml, filelists.xml, other.xml
+├── SRPMS/                           # Source RPMs
+├── build.sh                         # Build RPMs from spec files
+├── generate_repo.py                 # Python repodata generator (createrepo equivalent)
+└── README.md                        # This file
 ```
 
-## packages
+## Using as a DNF repository
+
+To add rstl.repo as a DNF repository on your Fedora system, create:
+
+**`/etc/yum.repos.d/rstl.repo`**
+
+```ini
+[rstl-repo]
+name=rstl.repo - Arch/ArtCraft packages for Fedora
+baseurl=https://arozoid.github.io/rstl.repo/fedora/x86_64/
+enabled=1
+gpgcheck=0
+metadata_expire=1h
+```
+
+Or for a local file-based repo:
+
+```ini
+[rstl-repo]
+name=rstl.repo - local
+baseurl=file:///home/youruser/rstl.repo/fedora/x86_64/
+enabled=1
+gpgcheck=0
+metadata_expire=1h
+```
+
+Then:
+
+```bash
+sudo dnf makecache
+sudo dnf install vectorcraft gridcraft deckcraft
+```
+
+## Building RPMs
+
+Each package has both a `PKGBUILD` (Arch reference) and a `.spec` file (Fedora RPM).
+
+Build RPMs on a Fedora system with `rpmbuild` installed:
+
+```bash
+sudo dnf install rpm-build
+cd fedora
+./build.sh
+```
+
+Or build a specific package:
+
+```bash
+./build.sh vectorcraft
+```
+
+To regenerate repodata from existing RPMs without rebuilding:
+
+```bash
+./build.sh --repo-only
+```
+
+## Packages
 
 - `adwaita-icon-theme-dark`: GNOME standard icons (dark-capable Adwaita), bundled without the `adwaita-cursors` dependency
 - `bluetuith`: TUI-based bluetooth connection manager
@@ -56,31 +118,17 @@ fedora/
 - `yewtube`: Terminal-based YouTube player and downloader
 - `zsh-auto-notify`: zsh plugin that automatically posts a notification when a long-running command finishes
 
-## building
-
-Each package has both a `PKGBUILD` (Arch reference) and a `.spec` file (Fedora RPM).
-Build RPMs with:
-
-```bash
-cd fedora
-./build.sh
-```
-
-Or build a specific package:
-
-```bash
-./build.sh vectorcraft
-```
-
-Requires `rpmbuild` (from `rpm-build` package) and source files accessible at the
-URLs referenced in each spec file.
-
-## umbrella repository
+## Umbrella repository
 
 This repository is an umbrella for both package formats:
 
 | Endpoint | Format | Path |
 |----------|--------|------|
-| Arch (backward compat) | PKGBUILD | `pkgbuilds/<pkg>/PKGBUILD` |
-| Arch (future primary) | PKGBUILD | `arch/pkgbuilds/<pkg>/PKGBUILD` |
-| Fedora | PKGBUILD + .spec | `fedora/pkgs/<pkg>/PKGBUILD` + `fedora/specs/<pkg>/<pkg>.spec` |
+| **Arch (backward compat)** | PKGBUILD | `pkgbuilds/<pkg>/PKGBUILD` |
+| **Arch (future primary)** | PKGBUILD | `arch/pkgbuilds/<pkg>/PKGBUILD` |
+| **Fedora** | PKGBUILD + .spec + RPM | `fedora/pkgs/<pkg>/PKGBUILD` + `fedora/specs/<pkg>/<pkg>.spec` + `fedora/x86_64/Packages/<pkg>.rpm` |
+
+The root of this repository remains the Arch Linux `pacman` repository for backwards
+compatibility. The `arch/` directory is a parallel Arch repository that will become
+the primary Arch endpoint in the future. The `fedora/` directory is a complete
+Fedora `dnf` repository with spec files, build scripts, and repodata generation.
