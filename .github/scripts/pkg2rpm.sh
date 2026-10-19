@@ -91,7 +91,6 @@ epoch=''
 rel=${pkgverfull##*-}
 ver=${pkgverfull%-*}
 if [[ $ver == *:* ]]; then epoch=${ver%%:*}; ver=${ver#*:}; fi
-case $archv in any) rpmarch=noarch ;; *) rpmarch=$archv ;; esac
 
 mapfile -t depends < <(sed -n 's/^depend = //p' "$gi")
 mapfile -t optdeps < <(sed -n 's/^optdepend = //p' "$gi")
@@ -148,13 +147,25 @@ while IFS= read -r f; do
   f=${f%/}
   [ -n "$f" ] || continue
   case $f in .*) continue ;; esac
-  esc=${f//\\/\\\\}
-  esc=${esc//\[/\\[}
-  esc=${esc//\?/\\?}
-  esc=${esc//\*/\\*}
-  printf '/%s\n' "$esc" >> "$files_list"
+  # Only include actual files, not directories
+  if [ -f "$work/root/$f" ]; then
+    esc=${f//\\/\\\\}
+    esc=${esc//\[/\\[}
+    esc=${esc//\?/\\?}
+    esc=${esc//\*/\\*}
+    printf '/%s\n' "$esc" >> "$files_list"
+  fi
 done < <(if command -v bsdtar >/dev/null 2>&1; then bsdtar -tf "$src"; else tar -tf "$src"; fi | sed 's|^\./||')
 sort -o "$files_list" "$files_list"
+
+# Detect whether the package contains ELF binaries to set BuildArch correctly.
+# Arch packages marked "any" may still ship compiled binaries.
+rpmarch=noarch
+if [ -n "$(find "$work/root" -type f -exec file {} + 2>/dev/null | grep -E 'ELF.*executable|ELF.*shared object' | head -1)" ]; then
+  rpmarch=x86_64
+elif [ "$archv" != "any" ]; then
+  rpmarch=$archv
+fi
 
 spec=$work/$pkgname.spec
 {
