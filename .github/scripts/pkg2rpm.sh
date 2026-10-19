@@ -143,19 +143,16 @@ done
 # file list: every entry except root-level pacman metadata (.PKGINFO, .MTREE, …)
 files_list=$work/files
 : > "$files_list"
-while IFS= read -r f; do
-  f=${f%/}
+find "$work/root" -type f 2>/dev/null | while read -r f; do
+  f=${f#"$work/root/"}
   [ -n "$f" ] || continue
   case $f in .*) continue ;; esac
-  # Only include actual files, not directories
-  if [ -f "$work/root/$f" ]; then
-    esc=${f//\\/\\\\}
-    esc=${esc//\[/\\[}
-    esc=${esc//\?/\\?}
-    esc=${esc//\*/\\*}
-    printf '/%s\n' "$esc" >> "$files_list"
-  fi
-done < <(if command -v bsdtar >/dev/null 2>&1; then bsdtar -tf "$src"; else tar -tf "$src"; fi | sed 's|^\./||')
+  esc=${f//\\/\\\\}
+  esc=${esc//\[/\\[}
+  esc=${esc//\?/\\?}
+  esc=${esc//\*/\\*}
+  printf '/%s\n' "$esc" >> "$files_list"
+done
 sort -o "$files_list" "$files_list"
 
 # Detect whether the package contains ELF binaries to set BuildArch correctly.
