@@ -63,7 +63,15 @@ map_dep() {
   name=${spec%%[<>=]*}
   rest=${spec#"$name"}
   local targets=${map[$name]:-$name}
-  if [ -n "${inrepo[$name]:-}" ]; then targets=$name; fi
+  if [ -n "${inrepo[$name]:-}" ]; then
+    targets=$name
+    # Keep version constraint for inrepo packages (same versioning scheme)
+  else
+    # For external dependencies (remapped or direct), strip version
+    # constraint: Fedora package versions won't match Arch soname
+    # versions like "0-64" or "1-64".
+    rest=""
+  fi
   for t in $targets; do printf '%s%s\n' "$t" "$rest"; done
 }
 
