@@ -140,10 +140,10 @@ for r in "${replaces[@]:-}"; do
   while IFS= read -r m; do obsoletes_m+=("$m"); done < <(map_dep "$r")
 done
 
-# file list: every entry except root-level pacman metadata (.PKGINFO, .MTREE, …)
+# file list: every regular file and symlink in the extracted root (not directories).
 files_list=$work/files
 : > "$files_list"
-find "$work/root" -type f 2>/dev/null | while read -r f; do
+find "$work/root" \( -type f -o -type l \) 2>/dev/null | while read -r f; do
   f=${f#"$work/root/"}
   [ -n "$f" ] || continue
   case $f in .*) continue ;; esac
