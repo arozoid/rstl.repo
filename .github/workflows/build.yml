@@ -216,6 +216,10 @@ jobs:
       - name: Build python-toml
         run: |
           set -euo pipefail
+          mkdir -p /tmp/toml-build/SOURCES
+          # Download Source0 so rpmbuild can extract it
+          curl -fsSL -o /tmp/toml-build/SOURCES/0.10.2.tar.gz \
+            https://github.com/uiri/toml/archive/refs/tags/0.10.2.tar.gz
           rpmbuild -bb specs/python-toml.spec --define "_topdir /tmp/toml-build"
           cp /tmp/toml-build/RPMS/noarch/*.rpm /tmp/rpms/
 
