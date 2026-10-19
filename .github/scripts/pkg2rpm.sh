@@ -70,7 +70,11 @@ map_dep() {
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/root" "$work/top"
-bsdtar -xf "$src" -C "$work/root"
+if command -v bsdtar >/dev/null 2>&1; then
+  bsdtar -xf "$src" -C "$work/root"
+else
+  tar -xf "$src" -C "$work/root"
+fi
 
 gi="$work/root/.PKGINFO"
 [ -f "$gi" ] || { echo "pkg2rpm: no .PKGINFO in $src" >&2; exit 1; }
@@ -149,7 +153,7 @@ while IFS= read -r f; do
   esc=${esc//\?/\\?}
   esc=${esc//\*/\\*}
   printf '/%s\n' "$esc" >> "$files_list"
-done < <(bsdtar -tf "$src" | sed 's|^\./||')
+done < <(if command -v bsdtar >/dev/null 2>&1; then bsdtar -tf "$src"; else tar -tf "$src"; fi | sed 's|^\./||')
 sort -o "$files_list" "$files_list"
 
 spec=$work/$pkgname.spec
