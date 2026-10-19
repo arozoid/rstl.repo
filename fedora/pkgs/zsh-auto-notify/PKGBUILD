@@ -1,0 +1,19 @@
+# Maintainer: arozoid
+pkgname=zsh-auto-notify
+pkgver=0.11.1
+pkgrel=1
+pkgdesc="zsh plugin that automatically posts a notification when a long-running command finishes"
+arch=(any)
+url="https://github.com/MichaelAquilina/zsh-auto-notify"
+license=(GPL-3.0-only)
+depends=(zsh libnotify)
+# auto: release
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+  install -Dm644 auto-notify.plugin.zsh \
+    "$pkgdir/usr/share/zsh/plugins/zsh-auto-notify/auto-notify.plugin.zsh"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

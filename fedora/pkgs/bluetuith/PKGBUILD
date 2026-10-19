@@ -1,0 +1,25 @@
+# Maintainer: rustle
+pkgname=bluetuith
+pkgver=0.2.7
+pkgrel=1
+pkgdesc="TUI-based bluetooth connection manager"
+arch=(x86_64)
+url="https://github.com/bluetuith-org/bluetuith"
+license=(MIT)
+depends=(glibc bluez-libs)
+makedepends=(go)
+options=(!lto !strip)
+# auto: release
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgname-$pkgver"
+  go build -trimpath -ldflags "-s -w" -o bluetuith .
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 bluetuith "$pkgdir/usr/bin/bluetuith"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
+}

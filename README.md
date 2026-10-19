@@ -1,6 +1,22 @@
 # rstl.repo
 
-custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.sway/) rice
+Umbrella repository for the [rstl.sway](https://github.com/arozoid/rstl.sway/) rice —
+custom package repositories for both Arch Linux (`pacman`) and Fedora (`dnf`).
+
+## repository layout
+
+| Endpoint | Format | Path |
+|----------|--------|------|
+| **Arch (backward compat)** | PKGBUILD | `pkgbuilds/<pkg>/PKGBUILD` |
+| **Arch (future primary)** | PKGBUILD | `arch/pkgbuilds/<pkg>/PKGBUILD` |
+| **Fedora** | PKGBUILD + .spec | `fedora/pkgs/<pkg>/PKGBUILD` + `fedora/specs/<pkg>/<pkg>.spec` |
+
+The root of this repository remains the Arch Linux `pacman` repository for backwards
+compatibility. The `arch/` directory is a parallel Arch repository that will become
+the primary Arch endpoint in the future. The `fedora/` directory is a new Fedora
+`dnf` repository with both PKGBUILDs (reference/build metadata) and `.spec` files
+(RPM specs) for every package.
+
 
 ## packages
 
@@ -47,7 +63,7 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 
 Packages auto-track their upstream: repos with releases use the latest release tag as the version (e.g. `3.5.1`); repos without releases use `YYYYMMDD`. `resolve.sh` + `inject.sh` patch the PKGBUILD at build time, so a scheduled build picks up new upstream versions automatically — no manual bumps needed. A few packages are pinned instead (no `# auto:` marker) because an auto-track version cannot resolve correctly, e.g. `calawk` and `python-yewtube-search-python`.
 
-## usage
+## usage — Arch (pacman)
 
 add to `/etc/pacman.conf`:
 
@@ -62,21 +78,43 @@ then:
 sudo pacman -Syu
 ```
 
+## usage — Fedora (dnf)
+
+Build RPMs from the spec files:
+
+```bash
+cd fedora
+./build.sh
+```
+
+Or build a specific package:
+
+```bash
+./build.sh vectorcraft
+```
+
+Requires `rpmbuild` (from `rpm-build` package).
+
 ## adding a new package
 
-1. create a directory in `pkgbuilds/<pkgname>/`
-2. add a `PKGBUILD` file
-3. add an `# auto:` marker to tell the build how to version it:
+1. create a directory in `pkgbuilds/<pkgname>/` (Arch root) and `arch/pkgbuilds/<pkgname>/` (Arch future)
+2. create `fedora/pkgs/<pkgname>/PKGBUILD` and `fedora/specs/<pkgname>/<pkgname>.spec` (Fedora)
+3. add an `# auto:` marker to the PKGBUILDs:
    - `# auto: release` — package version = upstream's latest release tag (leading `v` stripped)
-   - `# auto: date` — package version = `YYYYMMDD`; add `_commit=""` and set
-     `source=(... ::$url/archive/$_commit.tar.gz)` with `build/package` cd'ing into
-     `$srcdir/$pkgname-$_commit`
+   - `# auto: date` — package version = `YYYYMMDD`
 4. push to `main` — the workflow will build it automatically
 
-## building locally
+## building locally — Arch
 
 ```bash
 chmod +x build.sh
+./build.sh
+```
+
+## building locally — Fedora
+
+```bash
+chmod +x fedora/build.sh
 ./build.sh
 ```
 

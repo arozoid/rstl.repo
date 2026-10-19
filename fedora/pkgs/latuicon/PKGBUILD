@@ -1,0 +1,28 @@
+# Maintainer: rustle
+pkgname=latuicon
+pkgver=0.1.6
+pkgrel=1
+pkgdesc="TUI icon picker (emojis / kaomojis / unicode / nerd fonts)"
+arch=(x86_64)
+url="https://github.com/coko7/latuicon"
+license=(MIT)
+depends=(gcc-libs glibc)
+makedepends=(cargo rust)
+options=(!lto)
+# auto: release
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgname-$pkgver"
+  # the released tarball's Cargo.lock can drift from Cargo.toml; --locked
+  # refuses to regenerate it, so refresh deps first, then lock deterministically
+  cargo update
+  cargo build --release --locked
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 "${CARGO_TARGET_DIR:-target}/release/latuicon" "$pkgdir/usr/bin/latuicon"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
+}

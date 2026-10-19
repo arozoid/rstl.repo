@@ -1,0 +1,275 @@
+name: Build Packages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 12 * * *'  # daily at UTC noon
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  actions: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # -------------------------------------------------------------------------
+  # enumerate — topological build order + shard assignment. Packages are split
+  # across RSTL_SLOTS fixed worker slots; the worker matrix is independent of
+  # which (or how many) packages exist.
+  # -------------------------------------------------------------------------
+  enumerate:
+    runs-on: ubuntu-latest
+    outputs:
+      packages_json: ${{ steps.plan.outputs.packages_json }}
+      shard_map_json: ${{ steps.plan.outputs.shard_map_json }}
+      slots: ${{ steps.plan.outputs.slots }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: plan
+        run: |
+          set -euo pipefail
+          plan=$(RSTL_SLOTS=16 bash .github/scripts/enumerate.sh)
+          while IFS= read -r line; do
+            key=${line%%=*}
+            echo "${key}=${line#*=}" >> "$GITHUB_OUTPUT"
+          done <<< "$plan"
+      - name: Log plan
+        run: |
+          echo "packages: ${{ steps.plan.outputs.packages_json }}"
+          echo "shards:   ${{ steps.plan.outputs.shard_map_json }}"
+
+  # -------------------------------------------------------------------------
+  # build — 16 fixed worker slots; each slot builds the packages assigned to it
+  # (topo order, deps handled via gh artifact fetch when on another slot).
+  # -------------------------------------------------------------------------
+  build:
+    needs: enumerate
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+      options: --user root
+    strategy:
+      matrix:
+        shard: ['0','1','2','3','4','5','6','7','8','9','10','11','12','13','14','15']
+    env:
+      BUILDER: builder
+      CARGO_HOME: ${{ github.workspace }}/.cargo
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.cargo/target
+      RUSTUP_HOME: ${{ github.workspace }}/.rustup
+      GOPATH: ${{ github.workspace }}/.gopath
+      GOMODCACHE: ${{ github.workspace }}/.gomodcache
+      GOCACHE: ${{ github.workspace }}/.gocache
+    steps:
+      - name: Install deps
+        run: pacman -Syu --noconfirm pacman-contrib git jq github-cli rustup meson scdoc tllist xorgproto fcft libpulse systemd-libs libxcb libyaml pipewire pixman wayland wayland-protocols xcb-util xcb-util-cursor xcb-util-wm alsa-lib libinih polkit xdg-desktop-portal base-devel gtk-update-icon-cache clang cmake libva nasm
+
+      - uses: actions/checkout@v7
+
+      - name: Cache cargo toolchains/deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.cargo
+            ${{ github.workspace }}/.rustup
+            ${{ github.workspace }}/.gopath
+            ${{ github.workspace }}/.gomodcache
+            ${{ github.workspace }}/.gocache
+          key: cargo-${{ matrix.shard }}-${{ hashFiles('pkgbuilds/**') }}
+          restore-keys: |
+            cargo-${{ matrix.shard }}-
+            cargo-
+
+      - name: Add build user
+        run: |
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          install -d -o builder -g builder "$CARGO_HOME" "$RUSTUP_HOME" "$CARGO_TARGET_DIR"
+          sudo -u builder bash -c "CARGO_HOME='$CARGO_HOME' RUSTUP_HOME='$RUSTUP_HOME' rustup default stable"
+
+      - name: Build assigned packages
+        id: pkgbuild
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+          MY_PACKAGES_JSON: ${{ needs.enumerate.outputs.packages_json }}
+          SHARD_MAP_JSON: ${{ needs.enumerate.outputs.shard_map_json }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shard="${SHARD}"
+          my_shard="${SHARD_MAP_JSON}"
+          packages=()
+          deps_of=()
+          # walk the topo list; keep entries that belong to this slot
+          while IFS=$'\t' read -r pkg deps; do
+            slot=$(printf '%s' "$my_shard" | jq -r --arg p "$pkg" '.[$p] // ""')
+            if [ -z "$slot" ]; then
+              echo "::error::no slot mapping for $pkg" >&2
+              exit 1
+            fi
+            if [ "$slot" = "$shard" ]; then
+              packages+=("$pkg")
+              deps_of+=("$deps")
+            fi
+          done < <(printf '%s' "${MY_PACKAGES_JSON}" | jq -r '.[] | [.pkg, (.deps|join(" "))] | @tsv')
+
+          if [ "${#packages[@]}" -eq 0 ]; then
+            echo "no packages assigned to slot ${shard}"
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mkdir -p /tmp/deps
+          for idx in "${!packages[@]}"; do
+            pkg="${packages[$idx]}"
+            echo "::group::Building $pkg (slot $shard)"
+            for dep in ${deps_of[$idx]:-}; do
+              if pacman -Q "$dep" >/dev/null 2>&1; then continue; fi
+              dslot=$(printf '%s' "$my_shard" | jq -r --arg p "$dep" '.[$p] // ""')
+              if [ -z "$dslot" ]; then
+                echo "::error::$pkg needs '$dep' which has no shard assignment" >&2
+                exit 1
+              fi
+              echo "::group::gh debug (bug:deps)"
+              gh auth status 2>&1 | head -6
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" --jq '[.artifacts[].name] | join(",")' 2>&1 | head -3
+              echo "::endgroup::"
+              dl_err="$(mktemp)"
+              dest="/tmp/deps/$dslot"
+              tries=0
+              while :; do
+                aid=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+                      --jq ".artifacts[] | select(.name == \"shard-$dslot\") | .id" 2>"$dl_err" | head -1)
+                if [ -n "$aid" ] && gh api -H "Accept: application/vnd.github+json" \
+                    "repos/${GITHUB_REPOSITORY}/actions/artifacts/${aid}/zip" > "${dest}.zip" 2>"$dl_err"; then
+                  break
+                fi
+                tries=$((tries + 1))
+                if [ "$tries" -ge 360 ]; then
+                  echo "::error::timed out fetching shard-$dslot ($dep): $(tail -c 500 "$dl_err")" >&2
+                  exit 1
+                fi
+                if [ $((tries % 6)) -eq 0 ]; then
+                  echo "::warning::waiting for shard-$dslot ($dep) — ${tries}0s: $(tail -c 500 "$dl_err")" >&2
+                fi
+                sleep 10
+                : > "$dl_err"
+              done
+              mkdir -p "$dest"
+              bsdtar -xf "${dest}.zip" -C "$dest"
+              rm -f "${dest}.zip"
+              pacman -U --noconfirm --needed $(find "$dest" -type f -name '*.pkg.tar.*')
+            done
+            bash .github/scripts/build-pkg.sh "$pkg"
+            echo "::endgroup::"
+          done
+          echo "count=${#packages[@]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload slot artifacts
+        if: ${{ steps.pkgbuild.outputs.count != '0' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: shard-${{ matrix.shard }}
+          path: out/**/*.pkg.tar.*
+          retention-days: 1
+
+  # -------------------------------------------------------------------------
+  # assemble — collect every slot's packages, write the repo db, generate the
+  # static site and hand the tree to the Pages deploy.
+  # -------------------------------------------------------------------------
+  assemble:
+    needs: [enumerate, build]
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+      options: --user root
+    steps:
+      - name: Collect packages
+        uses: actions/download-artifact@v5
+        with:
+          pattern: shard-*
+          path: /tmp/repo
+          merge-multiple: true
+
+      - name: Verify collected packages
+        run: |
+          test -n "$(find /tmp/repo -type f -name '*.pkg.tar.*' 2>/dev/null | head -1)" \
+            || { echo "::error::no package artifacts collected (nothing built?)" >&2; exit 1; }
+
+      - name: Flatten packages into repo/
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/repo-flat
+          find /tmp/repo -mindepth 1 -type f -name '*.pkg.tar.*' -exec mv -t /tmp/repo-flat {} +
+          rm -rf /tmp/repo
+          mv /tmp/repo-flat /tmp/repo
+          ls -1 /tmp/repo
+
+      - name: Create repo database
+        run: |
+          cd /tmp/repo
+          repo-add -n rstl-repo.db.tar.gz *.pkg.tar.*
+
+      - name: Generate site
+        run: |
+          set -euo pipefail
+          cd /tmp/repo
+          total=$(ls *.pkg.tar.* 2>/dev/null | wc -l)
+          {
+            echo '<!DOCTYPE html>'
+            echo '<html lang="en"><head><meta charset="utf-8">'
+            echo '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            echo '<title>rstl.repo — custom pacman repository</title>'
+            echo '<style>body{font-family:system-ui,sans-serif;max-width:50rem;margin:2rem auto;padding:0 1rem;line-height:1.5}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid #ddd}code{background:#f4f4f4;padding:.1rem .3rem;border-radius:3px}a{color:#2563eb;text-decoration:none}desc{color:#555}</style>'
+            echo '</head><body>'
+            echo '<h1>rstl.repo</h1>'
+            echo "<p>custom pacman repository for the <a href=\"https://github.com/arozoid/rstl.sway/\">rstl.sway</a> rice — ${total} package(s)</p>"
+            echo '<table><tr><th>package</th><th>arch</th><th>size</th></tr>'
+            for pkgfile in *.pkg.tar.*; do
+              [ -e "$pkgfile" ] || continue
+              name=$(pacman -Qip "$pkgfile" | sed -n 's/^Name *: //p')
+              ver=$(pacman -Qip "$pkgfile" | sed -n 's/^Version *: //p')
+              arch=$(pacman -Qip "$pkgfile" | sed -n 's/^Architecture *: //p')
+              desc=$(pacman -Qip "$pkgfile" | sed -n 's/^Description *: //p')
+              size=$(du -h "$pkgfile" | cut -f1)
+              printf '<tr><td><a href="%s.html">%s</a></td><td>%s</td><td>%s</td></tr>\n' "$name" "$name" "${arch:-?}" "$size"
+              {
+                echo '<!DOCTYPE html>'
+                echo '<html lang="en"><head><meta charset="utf-8">'
+                echo "<title>${name} — rstl.repo</title>"
+                echo '<style>body{font-family:system-ui,sans-serif;max-width:50rem;margin:2rem auto;padding:0 1rem;line-height:1.5}code{background:#f4f4f4;padding:.1rem .3rem;border-radius:3px}a{color:#2563eb;text-decoration:none}ul{line-height:1.7}</style>'
+                echo '</head><body>'
+                echo '<p><a href="index.html">← rstl.repo</a></p>'
+                echo "<h1>${name}</h1>"
+                echo "<p class=\"desc\">${desc}</p>"
+                echo "<p><code>${pkgfile}</code> — ${size}</p>"
+                echo '<h2>files</h2><ul>'
+                tar -tf "$pkgfile" | grep -v '/$' | while read -r f; do echo "<li><code>${f}</code></li>"; done
+                echo '</ul></body></html>'
+              } > "${name}.html"
+            done
+            printf '</table></body></html>\n'
+          } > index.html
+          ls -la
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: /tmp/repo
+
+  deploy:
+    needs: assemble
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

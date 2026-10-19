@@ -1,0 +1,31 @@
+# Maintainer: rustle
+pkgname=yewtube
+pkgver=2.13.1
+pkgrel=1
+pkgdesc="Terminal-based YouTube player and downloader"
+arch=(any)
+url="https://github.com/mps-youtube/yewtube"
+license=(GPL3)
+depends=(python-pip python-httpx python-pylast python-pyperclip python-requests python-yewtube-search-python yt-dlp)
+makedepends=(python-build python-installer python-setuptools python-wheel)
+# auto: release
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  # upstream pins httpx<0.28 in requirements.txt; Arch ships python-httpx
+  # 0.28.x, so relax the pin like the AUR build does
+  sed -i '/httpx/ s/<.*//' requirements.txt
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  python -m build --wheel --no-isolation
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
+}

@@ -1,0 +1,24 @@
+# Maintainer: arozoid
+pkgname=xeo
+pkgver=4.0.0
+pkgrel=1
+pkgdesc="The .xeo scripting language interpreter (edition 2024)"
+arch=(x86_64)
+url="https://github.com/arozoid/xeo"
+license=(MIT)
+makedepends=(rustup)
+# auto: release
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgname-$pkgver"
+  rustup toolchain install nightly --profile minimal --component rust-src
+  cargo +nightly build --release
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 "${CARGO_TARGET_DIR:-target}/release/xeo" "$pkgdir/usr/bin/xeo"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
+}

@@ -1,0 +1,26 @@
+# Maintainer: rustle
+pkgname=gridcraft
+pkgver=0.6.1
+pkgrel=1
+pkgdesc="Spreadsheets and data; an open-source, clean-room reimplementation of Microsoft Excel, rebuilt in pure Rust"
+arch=(x86_64)
+url="https://github.com/storytold/gridcraft"
+license=(Apache-2.0 MIT)
+depends=(dbus glibc libgcc libglvnd libx11 libxcb libxcursor libxi libxkbcommon libxkbcommon-x11 vulkan-icd-loader wayland)
+options=(!strip)
+# auto: release
+source=("$pkgname-$pkgver.AppImage::$url/releases/download/v$pkgver/$pkgname-$pkgver-linux-x86_64.AppImage"
+        "LICENSE-APACHE::https://raw.githubusercontent.com/storytold/$pkgname/v$pkgver/LICENSE-APACHE"
+        "LICENSE-MIT::https://raw.githubusercontent.com/storytold/$pkgname/v$pkgver/LICENSE-MIT")
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+  cd "$srcdir"
+  chmod +x "$pkgname-$pkgver.AppImage"
+  "./$pkgname-$pkgver.AppImage" --appimage-extract >/dev/null
+  cd squashfs-root
+  install -dm755 "$pkgdir/usr"
+  cp -a usr/. "$pkgdir/usr/"
+  install -Dm644 "$srcdir/LICENSE-APACHE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE-APACHE"
+  install -Dm644 "$srcdir/LICENSE-MIT" "$pkgdir/usr/share/licenses/$pkgname/LICENSE-MIT"
+}
