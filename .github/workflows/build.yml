@@ -251,11 +251,80 @@ jobs:
           retention-days: 1
 
   # -------------------------------------------------------------------------
+  # void — mirror the finished Arch packages as Void XBPS packages, register
+  # them with xbps-rindex and publish a signed xbps repository alongside the
+  # pacman and dnf repos. Runs parallel to rpm; assemble waits for both and
+  # picks the result up as void/.
+  # -------------------------------------------------------------------------
+  void:
+    needs: [enumerate, build]
+    runs-on: ubuntu-latest
+    container: ghcr.io/void-linux/void-glibc-full:latest
+    steps:
+      - name: Install tools
+        shell: sh
+        run: xbps-install -Sy bash git curl zstd tar xbps
+
+      - uses: actions/checkout@v7
+
+      - name: Collect packages
+        uses: actions/download-artifact@v5
+        with:
+          pattern: shard-*
+          path: /tmp/arch
+          merge-multiple: true
+
+      - name: Flatten packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/flat /tmp/xbps
+          find /tmp/arch -mindepth 1 -type f -name '*.pkg.tar.*' -exec mv -t /tmp/flat {} +
+          echo "collected: $(ls -1 /tmp/flat | wc -l) packages"
+
+      - name: Convert packages to XBPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/xbps-names
+          for p in /tmp/flat/*.pkg.tar.*; do
+            bash .github/scripts/pkg2xbps.sh "$p" /tmp/xbps /tmp/xbps-names
+          done
+
+      - name: Create repo metadata and sign
+        shell: bash
+        run: |
+          set -euo pipefail
+          xbps-rindex -a /tmp/xbps/*.xbps
+          xbps-rindex -s \
+            --privkey void/keys/rstl-repo.pem \
+            --signedby "rstl.repo <rstl@arozoid.github.io>" \
+            /tmp/xbps
+          xbps-rindex -S --privkey void/keys/rstl-repo.pem /tmp/xbps/*.xbps
+          ls -la /tmp/xbps
+
+      - name: Smoke test — xbps must resolve every package
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Dry-run resolves the full dependency graph against the official
+          # Void repositories plus the freshly built local one. A bad mapped
+          # dependency or an unreadable package fails here. `yes` answers the
+          # repository key-import prompt when the signed local repo is read.
+          yes | xbps-install -S -n -y -R /tmp/xbps $(cat /tmp/xbps-names)
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: void-repo
+          path: /tmp/xbps
+          retention-days: 1
+
+  # -------------------------------------------------------------------------
   # assemble — collect every slot's packages, write the repo db, generate the
   # static site and hand the tree to the Pages deploy.
   # -------------------------------------------------------------------------
   assemble:
-    needs: [enumerate, build, rpm]
+    needs: [enumerate, build, rpm, void]
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
@@ -288,6 +357,12 @@ jobs:
           name: rpm-repo
           path: /tmp/repo/fedora
 
+      - name: Collect Void repo
+        uses: actions/download-artifact@v5
+        with:
+          name: void-repo
+          path: /tmp/repo/void
+
       - name: Create repo database
         run: |
           cd /tmp/repo
@@ -307,6 +382,7 @@ jobs:
             echo '</head><body>'
             echo '<h1>rstl.repo</h1>'
             echo "<p>custom pacman repository for the <a href=\"https://github.com/arozoid/rstl.sway/\">rstl.sway</a> rice — ${total} package(s)</p>"
+            echo '<p>also published from this tree: <a href="fedora/">Fedora (dnf)</a> · <a href="void/">Void Linux (xbps)</a></p>'
             echo '<table><tr><th>package</th><th>arch</th><th>size</th></tr>'
             for pkgfile in *.pkg.tar.*; do
               [ -e "$pkgfile" ] || continue

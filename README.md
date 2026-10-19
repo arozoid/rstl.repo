@@ -1,7 +1,8 @@
 # rstl.repo
 
 Umbrella repository for the [rstl.sway](https://github.com/arozoid/rstl.sway/) rice —
-custom package repositories for both Arch Linux (`pacman`) and Fedora (`dnf`).
+custom package repositories for Arch Linux (`pacman`), Fedora (`dnf`) and
+Void Linux (`xbps`).
 
 ## repository layout
 
@@ -10,12 +11,15 @@ custom package repositories for both Arch Linux (`pacman`) and Fedora (`dnf`).
 | **Arch (backward compat)** | PKGBUILD | `pkgbuilds/<pkg>/PKGBUILD` |
 | **Arch (future primary)** | PKGBUILD | `arch/pkgbuilds/<pkg>/PKGBUILD` |
 | **Fedora** | PKGBUILD + .spec | `fedora/pkgs/<pkg>/PKGBUILD` + `fedora/specs/<pkg>/<pkg>.spec` |
+| **Void Linux** | XBPS package | `void/` (converted from the built Arch packages) |
 
 The root of this repository remains the Arch Linux `pacman` repository for backwards
 compatibility. The `arch/` directory is a parallel Arch repository that will become
 the primary Arch endpoint in the future. The `fedora/` directory is a new Fedora
 `dnf` repository with both PKGBUILDs (reference/build metadata) and `.spec` files
-(RPM specs) for every package.
+(RPM specs) for every package. The `void/` directory holds the XBPS repository
+tooling: the same finished Arch packages are converted to `.xbps` and indexed by
+`xbps-rindex`, in parallel with the RPM conversion.
 
 
 ## packages
@@ -95,6 +99,24 @@ Or build a specific package:
 
 Requires `rpmbuild` (from `rpm-build` package).
 
+## usage — Void Linux (xbps)
+
+Add the repository to `/etc/xbps.d/0-rstl.conf`:
+
+```ini
+repository=https://arozoid.github.io/rstl.repo/void
+```
+
+Then sync (accept the repository signing key on the first sync):
+
+```bash
+sudo xbps-install -S
+```
+
+The `0-` prefix makes rstl.repo take precedence over same-named packages in the
+official Void repositories. The rstl.sway installers add this file and import
+the key automatically on Void systems.
+
 ## adding a new package
 
 1. create a directory in `pkgbuilds/<pkgname>/` (Arch root) and `arch/pkgbuilds/<pkgname>/` (Arch future)
@@ -103,6 +125,9 @@ Requires `rpmbuild` (from `rpm-build` package).
    - `# auto: release` — package version = upstream's latest release tag (leading `v` stripped)
    - `# auto: date` — package version = `YYYYMMDD`
 4. push to `main` — the workflow will build it automatically
+
+The Void endpoint needs no per-package files: CI converts the finished Arch
+package automatically.
 
 ## building locally — Arch
 
@@ -117,6 +142,16 @@ chmod +x build.sh
 chmod +x fedora/build.sh
 ./build.sh
 ```
+
+## building locally — Void Linux
+
+```bash
+chmod +x void/build.sh
+./void/build.sh
+```
+
+Requires the `xbps` tools (`sudo xbps-install -Sy xbps`). On a non-Void host run
+it in the official container; see `void/README.md`.
 
 ---
 

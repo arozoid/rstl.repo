@@ -14,3 +14,7 @@ src/
 *.sig
 *.rpm
 rpmbuild/
+*.xbps
+*.xbps.sig2
+*-repodata
+void/repo/
