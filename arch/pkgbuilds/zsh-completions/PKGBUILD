@@ -1,0 +1,20 @@
+# Maintainer: rustle
+pkgname=zsh-completions
+pkgver=0.36.0
+pkgrel=1
+pkgdesc="Additional completion definitions for Zsh"
+arch=(any)
+url="https://github.com/zsh-users/zsh-completions"
+license=(MIT)
+depends=(zsh)
+# auto: release
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -d "$pkgdir/usr/share/zsh/site-functions"
+  install -m644 src/* "$pkgdir/usr/share/zsh/site-functions/"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

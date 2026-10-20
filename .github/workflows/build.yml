@@ -235,14 +235,20 @@ jobs:
           set -euo pipefail
           createrepo_c /tmp/rpms
           printf '%s\n' \
-            '[rstl]' \
+            '[rstl-repo]' \
             'name=rstl.repo' \
-            'baseurl=https://arozoid.github.io/rstl.repo/fedora' \
+            'baseurl=https://arozoid.github.io/rstl.repo/fedora/' \
             'enabled=1' \
             'gpgcheck=0' > /tmp/rpms/rstl.repo
 
       - name: Smoke test — dnf must resolve every package
-        run: dnf -y install /tmp/rpms/*.rpm
+        # noopenh264 in the main Fedora repo provides libopenh264.so.8; the
+        # optional fedora-cisco-openh264 repo is disabled so dnf cannot pick a
+        # stale cisco package that the mirrors no longer carry.
+        run: >-
+          dnf -y --setopt=install_weak_deps=False
+          --disablerepo=fedora-cisco-openh264
+          install /tmp/rpms/*.rpm
 
       - uses: actions/upload-artifact@v5
         with:
@@ -309,9 +315,10 @@ jobs:
           set -euo pipefail
           # Dry-run resolves the full dependency graph against the official
           # Void repositories plus the freshly built local one. A bad mapped
-          # dependency or an unreadable package fails here. `yes` answers the
-          # repository key-import prompt when the signed local repo is read.
-          yes | xbps-install -S -n -y -R /tmp/xbps $(cat /tmp/xbps-names)
+          # dependency or an unreadable package fails here. The printf answers
+          # the repository key-import prompt when the signed local repo is read;
+          # `yes` would trigger SIGPIPE under pipefail once xbps-install exits.
+          printf 'y\n' | xbps-install -S -n -y -R /tmp/xbps $(cat /tmp/xbps-names)
 
       - uses: actions/upload-artifact@v5
         with:

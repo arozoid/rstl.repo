@@ -108,6 +108,10 @@ map_dep() {
     # versions carry an _revision), so drop the constraint entirely.
     rest=""
   fi
+  # xbps-install cannot parse a bare dependency name: every run_depends entry
+  # must be a full pkgver or a pattern. Unversioned dependencies become ">=0",
+  # which is the lower bound form Void's own packages use.
+  [ -n "$rest" ] || rest=">=0"
   for t in $targets; do printf '%s%s\n' "$t" "$rest"; done
 }
 

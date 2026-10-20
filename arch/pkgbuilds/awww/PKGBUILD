@@ -1,0 +1,38 @@
+# Maintainer: rustle
+pkgname=awww
+pkgver=0.12.1
+pkgrel=1
+pkgdesc="Efficient animated wallpaper daemon for Wayland, controlled at runtime"
+arch=(x86_64)
+url="https://codeberg.org/LGFae/awww"
+license=(GPL-3.0-or-later)
+depends=(glibc gcc-libs libxkbcommon lz4)
+makedepends=(rustup dav1d scdoc wayland wayland-protocols)
+options=(!lto)
+# auto: release
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd awww
+  export RUSTUP_TOOLCHAIN=stable
+  cargo build --release --all-features
+  sh doc/gen.sh
+}
+
+package() {
+  cd awww
+  install -Dm755 "${CARGO_TARGET_DIR:-target}/release/awww" "$pkgdir/usr/bin/awww"
+  install -Dm755 "${CARGO_TARGET_DIR:-target}/release/awww-daemon" "$pkgdir/usr/bin/awww-daemon"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 CHANGELOG.md "$pkgdir/usr/share/doc/$pkgname/CHANGELOG.md" 2>/dev/null || true
+
+  install -d "$pkgdir/usr/share/man/man1"
+  install -m644 doc/generated/*.1 "$pkgdir/usr/share/man/man1/"
+
+  install -Dm644 completions/_awww "$pkgdir/usr/share/zsh/site-functions/_awww"
+  install -Dm644 completions/awww.bash "$pkgdir/usr/share/bash-completion/completions/awww"
+  install -Dm644 completions/awww.fish "$pkgdir/usr/share/fish/vendor_completions.d/awww.fish"
+  install -Dm644 completions/awww.elv "$pkgdir/usr/share/elvish/lib/awww.elv"
+}

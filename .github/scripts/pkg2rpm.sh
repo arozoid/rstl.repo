@@ -55,6 +55,16 @@ declare -A map=(
   [wayland]='libwayland-client libwayland-cursor libwayland-egl'
   [wayland-protocols]=wayland-protocols-devel
   [zlib]=zlib-ng-compat
+  [networkmanager]=NetworkManager
+  [bluez-utils]=bluez
+  [adwaita-cursors]=adwaita-cursor-theme
+  [pipewire-pulse]=pipewire-pulseaudio
+  [greetd-tuigreet]=tuigreet
+  [xorg-xwayland]=xorg-x11-server-Xwayland
+  [noto-fonts-emoji]=google-noto-color-emoji-fonts
+  [mesa]=mesa-dri-drivers
+  [openh264]=noopenh264
+  [wget]=wget2-wget
 )
 
 # name [+version constraint] -> fedora name(s) [+same constraint], one per line

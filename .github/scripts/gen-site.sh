@@ -139,7 +139,7 @@ EOF
 <h2 id="fedora">Fedora <span class="muted">dnf</span></h2>
 <p>Save this as <code>/etc/yum.repos.d/rstl.repo</code>:</p>
 <pre>[rstl-repo]
-baseurl=$base/fedora
+baseurl=$base/fedora/
 enabled=1
 gpgcheck=0</pre>
 <p>Or pick a single package — the name links to its install command, download grabs the file:</p>

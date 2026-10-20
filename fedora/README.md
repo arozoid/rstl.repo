@@ -18,6 +18,9 @@ fedora/
 └── README.md                        # This file
 ```
 
+The CI publishes a flat repository under `.../rstl.repo/fedora/`:
+RPMs sit next to `repodata/`, and a ready-to-copy `rstl.repo` is included.
+
 ## Using as a DNF repository
 
 To add rstl.repo as a DNF repository on your Fedora system, create:
@@ -27,7 +30,7 @@ To add rstl.repo as a DNF repository on your Fedora system, create:
 ```ini
 [rstl-repo]
 name=rstl.repo - Arch/ArtCraft packages for Fedora
-baseurl=https://arozoid.github.io/rstl.repo/fedora
+baseurl=https://arozoid.github.io/rstl.repo/fedora/
 enabled=1
 gpgcheck=0
 metadata_expire=1h

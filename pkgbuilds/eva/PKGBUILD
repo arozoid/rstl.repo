@@ -1,0 +1,30 @@
+# Maintainer: rustle
+pkgname=eva
+pkgver=0.3.1
+pkgrel=1
+pkgdesc="Simple calculator REPL, similar to bc(1)"
+arch=(x86_64)
+url="https://github.com/NerdyPepper/eva"
+license=(MIT)
+depends=(glibc gcc-libs)
+makedepends=(rustup)
+conflicts=(eva-git)
+options=(!lto)
+# auto: release
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgname-$pkgver"
+  # io-lifetimes 0.7 (via rustyline 10) uses removed rustc_attrs attributes
+  # when built with nightly; stable skips them and builds cleanly.
+  export RUSTUP_TOOLCHAIN=stable
+  cargo build --release --locked
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 "${CARGO_TARGET_DIR:-target}/release/$pkgname" "$pkgdir/usr/bin/$pkgname"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 readme.md "$pkgdir/usr/share/doc/$pkgname/readme.md" 2>/dev/null || true
+}

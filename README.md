@@ -29,6 +29,7 @@ the RPM conversion.
 - `dssd`: Dead simple freedesktop SecretService implementation
 - `xdg-desktop-portal-termfilechooser`: Terminal file chooser portal backend
 - `yambar`: Modular status panel (built without -Werror)
+- `awww`: Efficient animated wallpaper daemon for Wayland, controlled at runtime
 - `ttf-jetbrains-mono-nerd-min`: JetBrains Mono Nerd Font — regular weight only (replaces `ttf-jetbrains-mono-nerd`)
 - `papirus-icon-theme-dark-only`: Papirus-Dark icon theme only (replaces `papirus-icon-theme`)
 - `adwaita-icon-theme-dark`: GNOME standard Adwaita icons (dark-capable) without the `adwaita-cursors` dependency
@@ -38,19 +39,23 @@ the RPM conversion.
 - `python-yewtube-search-python`: Search for YouTube videos/channels/playlists without the Data API (runtime dep of `yewtube`)
 
 - `bluetuith`: TUI-based bluetooth connection manager
+- `bluetui`: TUI for managing bluetooth devices
 - `clipse`: Configurable TUI clipboard manager for Unix
 - `latuicon`: TUI icon picker (emojis / kaomojis / unicode / nerd fonts)
 - `rstl-pick`: Compact fuzzy search TUI picker for terminal apps (nmtui / wiremix / clipse / bluetuith / latuicon)
 - `xeo`: The `.xeo` scripting language interpreter (edition 2024)
 - `xeon`: The 'modern' package manager for `.xeo` packages
 - `calawk`: Small interactive expression calculator wrapper around awk
+- `eva`: Simple calculator REPL, similar to bc(1)
 - `oxicord`: Vim-native Discord TUI client
 - `concord`: Feature-rich TUI client for Discord (built from source; voice calls & screen share included)
 - `rovr`: Post-modern terminal file explorer (Nuitka binary)
+- `superfile`: Pretty fancy and modern terminal file manager (installs `spf`)
 - `yewtube`: Terminal-based YouTube player and downloader
 - `myx`: Lean, beautiful terminal Spotify player
 - `chroncal`: Terminal-first calendar, todo and journal manager
 - `fzf-tab`: Replace zsh's default completion selection menu with fzf
+- `zsh-completions`: Additional completion definitions for Zsh
 - `zsh-auto-notify`: Automatic notification when a long-running command finishes
 - `vectorcraft`: Vector illustration; an open-source, clean-room reimplementation of Adobe Illustrator, rebuilt in pure Rust
 - `filmcraft`: Video editing, color and sound; an open-source, clean-room reimplementation of Adobe Premiere Pro, rebuilt in pure Rust
@@ -88,6 +93,22 @@ sudo pacman -Syu
 ```
 
 ## usage — Fedora (dnf)
+
+Add the published repository as `/etc/yum.repos.d/rstl.repo`:
+
+```ini
+[rstl-repo]
+name=rstl.repo
+baseurl=https://arozoid.github.io/rstl.repo/fedora/
+enabled=1
+gpgcheck=0
+```
+
+Then refresh the metadata:
+
+```bash
+sudo dnf makecache
+```
 
 Build RPMs from the spec files:
 
