@@ -53,7 +53,8 @@ add to `/etc/pacman.conf`:
 
 ```
 [rstl-repo]
-Server = https://arozoid.github.io/rstl.repo
+SigLevel = Optional TrustAll
+Server = https://arozoid.github.io/rstl.repo/arch/
 ```
 
 then:

@@ -13,13 +13,14 @@ Void Linux (`xbps`).
 | **Fedora** | PKGBUILD + .spec | `fedora/pkgs/<pkg>/PKGBUILD` + `fedora/specs/<pkg>/<pkg>.spec` |
 | **Void Linux** | XBPS package | `void/` (converted from the built Arch packages) |
 
-The root of this repository remains the Arch Linux `pacman` repository for backwards
-compatibility. The `arch/` directory is a parallel Arch repository that will become
-the primary Arch endpoint in the future. The `fedora/` directory is a new Fedora
-`dnf` repository with both PKGBUILDs (reference/build metadata) and `.spec` files
-(RPM specs) for every package. The `void/` directory holds the XBPS repository
-tooling: the same finished Arch packages are converted to `.xbps` and indexed by
-`xbps-rindex`, in parallel with the RPM conversion.
+The root `pkgbuilds/` tree remains the Arch package source for backwards compatibility;
+`arch/pkgbuilds/` mirrors it for the planned move to `arch/` as the primary source. The
+published `pacman` repository is served from `/arch/`, with the site root kept as an
+alias for the old URL. The `fedora/` directory is a new Fedora `dnf` repository with
+both PKGBUILDs (reference/build metadata) and `.spec` files (RPM specs) for every
+package. The `void/` directory holds the XBPS repository tooling: the same finished
+Arch packages are converted to `.xbps` and indexed by `xbps-rindex`, in parallel with
+the RPM conversion.
 
 
 ## packages
@@ -73,8 +74,12 @@ add to `/etc/pacman.conf`:
 
 ```
 [rstl-repo]
-Server = https://arozoid.github.io/rstl.repo
+SigLevel = Optional TrustAll
+Server = https://arozoid.github.io/rstl.repo/arch/
 ```
+
+The repository is also served from the site root (`https://arozoid.github.io/rstl.repo`)
+as a backwards-compatible alias.
 
 then:
 

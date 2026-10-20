@@ -330,6 +330,11 @@ jobs:
       image: archlinux:base-devel
       options: --user root
     steps:
+      - name: Install git
+        run: pacman -Syu --noconfirm git
+
+      - uses: actions/checkout@v7
+
       - name: Collect packages
         uses: actions/download-artifact@v5
         with:
@@ -342,14 +347,12 @@ jobs:
           test -n "$(find /tmp/repo -type f -name '*.pkg.tar.*' 2>/dev/null | head -1)" \
             || { echo "::error::no package artifacts collected (nothing built?)" >&2; exit 1; }
 
-      - name: Flatten packages into repo/
+      - name: Flatten packages into arch/
         run: |
           set -euo pipefail
-          mkdir -p /tmp/repo-flat
-          find /tmp/repo -mindepth 1 -type f -name '*.pkg.tar.*' -exec mv -t /tmp/repo-flat {} +
-          rm -rf /tmp/repo
-          mv /tmp/repo-flat /tmp/repo
-          ls -1 /tmp/repo
+          mkdir -p /tmp/repo/arch
+          find /tmp/repo -mindepth 1 -type f -name '*.pkg.tar.*' -exec mv -t /tmp/repo/arch {} +
+          ls -1 /tmp/repo/arch
 
       - name: Collect RPM repo
         uses: actions/download-artifact@v5
@@ -365,51 +368,22 @@ jobs:
 
       - name: Create repo database
         run: |
-          cd /tmp/repo
+          set -euo pipefail
+          cd /tmp/repo/arch
           repo-add -n rstl-repo.db.tar.gz *.pkg.tar.*
 
-      - name: Generate site
+      - name: Link the Arch repo from the root
         run: |
           set -euo pipefail
           cd /tmp/repo
-          total=$(ls *.pkg.tar.* 2>/dev/null | wc -l)
-          {
-            echo '<!DOCTYPE html>'
-            echo '<html lang="en"><head><meta charset="utf-8">'
-            echo '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            echo '<title>rstl.repo — custom pacman repository</title>'
-            echo '<style>body{font-family:system-ui,sans-serif;max-width:50rem;margin:2rem auto;padding:0 1rem;line-height:1.5}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid #ddd}code{background:#f4f4f4;padding:.1rem .3rem;border-radius:3px}a{color:#2563eb;text-decoration:none}desc{color:#555}</style>'
-            echo '</head><body>'
-            echo '<h1>rstl.repo</h1>'
-            echo "<p>custom pacman repository for the <a href=\"https://github.com/arozoid/rstl.sway/\">rstl.sway</a> rice — ${total} package(s)</p>"
-            echo '<p>also published from this tree: <a href="fedora/">Fedora (dnf)</a> · <a href="void/">Void Linux (xbps)</a></p>'
-            echo '<table><tr><th>package</th><th>arch</th><th>size</th></tr>'
-            for pkgfile in *.pkg.tar.*; do
-              [ -e "$pkgfile" ] || continue
-              name=$(pacman -Qip "$pkgfile" | sed -n 's/^Name *: //p')
-              ver=$(pacman -Qip "$pkgfile" | sed -n 's/^Version *: //p')
-              arch=$(pacman -Qip "$pkgfile" | sed -n 's/^Architecture *: //p')
-              desc=$(pacman -Qip "$pkgfile" | sed -n 's/^Description *: //p')
-              size=$(du -h "$pkgfile" | cut -f1)
-              printf '<tr><td><a href="%s.html">%s</a></td><td>%s</td><td>%s</td></tr>\n' "$name" "$name" "${arch:-?}" "$size"
-              {
-                echo '<!DOCTYPE html>'
-                echo '<html lang="en"><head><meta charset="utf-8">'
-                echo "<title>${name} — rstl.repo</title>"
-                echo '<style>body{font-family:system-ui,sans-serif;max-width:50rem;margin:2rem auto;padding:0 1rem;line-height:1.5}code{background:#f4f4f4;padding:.1rem .3rem;border-radius:3px}a{color:#2563eb;text-decoration:none}ul{line-height:1.7}</style>'
-                echo '</head><body>'
-                echo '<p><a href="index.html">← rstl.repo</a></p>'
-                echo "<h1>${name}</h1>"
-                echo "<p class=\"desc\">${desc}</p>"
-                echo "<p><code>${pkgfile}</code> — ${size}</p>"
-                echo '<h2>files</h2><ul>'
-                tar -tf "$pkgfile" | grep -v '/$' | while read -r f; do echo "<li><code>${f}</code></li>"; done
-                echo '</ul></body></html>'
-              } > "${name}.html"
-            done
-            printf '</table></body></html>\n'
-          } > index.html
+          # Backwards compatibility: the old `Server = .../rstl.repo/` keeps
+          # working. The Pages uploader dereferences symlinks, so the published
+          # root contains real files, but the tree has a single source of truth.
+          ln -sf arch/*.pkg.tar.* arch/rstl-repo.* .
           ls -la
+
+      - name: Generate site
+        run: bash .github/scripts/gen-site.sh /tmp/repo
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5

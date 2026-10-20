@@ -27,7 +27,7 @@ To add rstl.repo as a DNF repository on your Fedora system, create:
 ```ini
 [rstl-repo]
 name=rstl.repo - Arch/ArtCraft packages for Fedora
-baseurl=https://arozoid.github.io/rstl.repo/fedora/x86_64/
+baseurl=https://arozoid.github.io/rstl.repo/fedora
 enabled=1
 gpgcheck=0
 metadata_expire=1h
