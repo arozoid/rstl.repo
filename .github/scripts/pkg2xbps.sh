@@ -35,7 +35,10 @@ done
 declare -A map=(
   [awk]=gawk
   [sh]=bash
+  [freetype2]=freetype
   [gcc-libs]='libgcc libstdc++'
+  [libegl]=libglvnd
+  [libgl]=libglvnd
   [libinih]=inih
   [libpipewire]=libpipewire
   [libpipewire-0.3.so]=libpipewire
