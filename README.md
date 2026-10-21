@@ -41,6 +41,7 @@ the RPM conversion.
 - `bluetuith`: TUI-based bluetooth connection manager
 - `bluetui`: TUI for managing bluetooth devices
 - `clipse`: Configurable TUI clipboard manager for Unix
+- `disktui`: TUI for disk management and partitioning
 - `latuicon`: TUI icon picker (emojis / kaomojis / unicode / nerd fonts)
 - `rstl-pick`: Compact fuzzy search TUI picker for terminal apps (nmtui / wiremix / clipse / bluetuith / latuicon)
 - `xeo`: The `.xeo` scripting language interpreter (edition 2024)

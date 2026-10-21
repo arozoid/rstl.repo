@@ -18,6 +18,7 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 
 - `bluetuith`: TUI-based bluetooth connection manager
 - `clipse`: Configurable TUI clipboard manager for Unix
+- `disktui`: TUI for disk management and partitioning
 - `latuicon`: TUI icon picker (emojis / kaomojis / unicode / nerd fonts)
 - `rstl-pick`: Compact fuzzy search TUI picker for terminal apps (nmtui / wiremix / clipse / bluetuith / latuicon)
 - `xeo`: The `.xeo` scripting language interpreter (edition 2024)

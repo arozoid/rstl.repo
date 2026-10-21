@@ -89,6 +89,7 @@ To regenerate repodata from existing RPMs without rebuilding:
 - `concord`: Feature-rich TUI client for Discord (built from source; voice calls & screen share included)
 - `deckcraft`: Presentations and slide shows; an open-source, clean-room reimplementation of Microsoft PowerPoint, rebuilt in pure Rust
 - `designcraft`: Page layout and publishing; an open-source, clean-room reimplementation of Adobe InDesign, rebuilt in pure Rust
+- `disktui`: TUI for disk management and partitioning
 - `dssd`: Dead simple freedesktop SecretService implementation
 - `effectcraft`: Motion graphics and visual effects; an open-source, clean-room reimplementation of Adobe After Effects, rebuilt in pure Rust
 - `figcraft`: Interface design; an open-source, clean-room reimplementation of Figma, rebuilt in pure Rust
