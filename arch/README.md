@@ -8,6 +8,7 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `dssd`: Dead simple freedesktop SecretService implementation
 - `xdg-desktop-portal-termfilechooser`: Terminal file chooser portal backend
 - `yambar`: Modular status panel (built without -Werror)
+- `sov`: Workspace overview overlay for sway
 - `ttf-jetbrains-mono-nerd-min`: JetBrains Mono Nerd Font — regular weight only (replaces `ttf-jetbrains-mono-nerd`)
 - `papirus-icon-theme-dark-only`: Papirus-Dark icon theme only (replaces `papirus-icon-theme`)
 - `adwaita-icon-theme-dark`: GNOME standard Adwaita icons (dark-capable) without the `adwaita-cursors` dependency

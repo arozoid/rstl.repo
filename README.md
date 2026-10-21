@@ -29,6 +29,7 @@ the RPM conversion.
 - `dssd`: Dead simple freedesktop SecretService implementation
 - `xdg-desktop-portal-termfilechooser`: Terminal file chooser portal backend
 - `yambar`: Modular status panel (built without -Werror)
+- `sov`: Workspace overview overlay for sway
 - `awww`: Efficient animated wallpaper daemon for Wayland, controlled at runtime
 - `ttf-jetbrains-mono-nerd-min`: JetBrains Mono Nerd Font — regular weight only (replaces `ttf-jetbrains-mono-nerd`)
 - `papirus-icon-theme-dark-only`: Papirus-Dark icon theme only (replaces `papirus-icon-theme`)
