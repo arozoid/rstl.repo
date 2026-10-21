@@ -110,7 +110,6 @@ To regenerate repodata from existing RPMs without rebuilding:
 - `rstl-pick`: Compact fuzzy-search TUI app picker for the rstl.sway desktop
 - `rstlpk`: Minimal polkit authentication agent for the rstl.sway rice (no gtk)
 - `soundcraft`: Recording, editing and mixing audio; an open-source, clean-room reimplementation of Avid Pro Tools, rebuilt in pure Rust
-- `sov`: Workspace overview overlay for sway
 - `ttf-jetbrains-mono-nerd-min`: JetBrains Mono Nerd Font — minimal (regular weight only)
 - `vectorcraft`: Vector illustration; an open-source, clean-room reimplementation of Adobe Illustrator, rebuilt in pure Rust
 - `wordcraft`: Writing and document design; an open-source, clean-room reimplementation of Microsoft Word, rebuilt in pure Rust
