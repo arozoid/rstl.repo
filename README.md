@@ -43,6 +43,7 @@ the RPM conversion.
 - `clipse`: Configurable TUI clipboard manager for Unix
 - `disktui`: TUI for disk management and partitioning
 - `latuicon`: TUI icon picker (emojis / kaomojis / unicode / nerd fonts)
+- `ratl`: JSON-driven terminal dialogs rendered with ratatui
 - `rstl-pick`: Compact fuzzy search TUI picker for terminal apps (nmtui / wiremix / clipse / bluetuith / latuicon)
 - `xeo`: The `.xeo` scripting language interpreter (edition 2024)
 - `xeon`: The 'modern' package manager for `.xeo` packages

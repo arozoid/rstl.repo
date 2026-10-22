@@ -1,0 +1,29 @@
+# Maintainer: arozoid
+pkgname=ratl
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="JSON-driven terminal dialogs rendered with ratatui"
+arch=(x86_64)
+url="https://github.com/arozoid/ratl"
+license=(MIT)
+depends=(glibc gcc-libs)
+makedepends=(rustup)
+options=(!lto)
+# auto: release
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgname-$pkgver"
+  rustup toolchain install nightly --profile minimal --no-self-update
+  cargo +nightly build --release --locked
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 "${CARGO_TARGET_DIR:-target}/release/$pkgname" "$pkgdir/usr/bin/$pkgname"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 schema.json "$pkgdir/usr/share/doc/$pkgname/schema.json"
+  install -Dm644 ratl.json "$pkgdir/usr/share/doc/$pkgname/ratl.json"
+}
