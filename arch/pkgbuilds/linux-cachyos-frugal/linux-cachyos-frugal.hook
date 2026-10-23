@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = linux-cachyos
+
+[Action]
+Description = Rebuilding FRUGAL CachyOS kernel artifacts...
+When = PostTransaction
+Exec = /usr/bin/linux-cachyos-frugal --auto --from-installed
+AbortOnFail = No

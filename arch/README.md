@@ -20,6 +20,7 @@ custom pacman repository for the [rstl.sway](https://github.com/arozoid/rstl.swa
 - `clipse`: Configurable TUI clipboard manager for Unix
 - `disktui`: TUI for disk management and partitioning
 - `latuicon`: TUI icon picker (emojis / kaomojis / unicode / nerd fonts)
+- `linux-cachyos-frugal`: Build and deploy FRUGAL boot artifacts from the latest prebuilt CachyOS kernel
 - `rstl-pick`: Compact fuzzy search TUI picker for terminal apps (nmtui / wiremix / clipse / bluetuith / latuicon)
 - `xeo`: The `.xeo` scripting language interpreter (edition 2024)
 - `xeon`: The 'modern' package manager for `.xeo` packages

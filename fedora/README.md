@@ -99,6 +99,7 @@ To regenerate repodata from existing RPMs without rebuilding:
 - `gridcraft`: Spreadsheets and data; an open-source, clean-room reimplementation of Microsoft Excel, rebuilt in pure Rust
 - `latuicon`: TUI icon picker (emojis / kaomojis / unicode / nerd fonts)
 - `lightcraft`: Photo library and raw development; an open-source, clean-room reimplementation of Adobe Lightroom, rebuilt in pure Rust
+- `linux-cachyos-frugal`: Build FRUGAL boot artifacts from the latest prebuilt CachyOS kernel
 - `myx`: Lean, beautiful terminal Spotify player
 - `notwaita-cursors-grey`: Grey Notwaita cursor theme — Adwaita-inspired, HiDPI (grey only, trimmed to 24/32/48px)
 - `oxicord`: Vim-native Discord TUI for terminal enthusiasts

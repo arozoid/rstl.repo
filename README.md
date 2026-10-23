@@ -44,6 +44,7 @@ the RPM conversion.
 - `disktui`: TUI for disk management and partitioning
 - `latuicon`: TUI icon picker (emojis / kaomojis / unicode / nerd fonts)
 - `ratl`: JSON-driven terminal dialogs rendered with ratatui
+- `linux-cachyos-frugal`: Build and deploy FRUGAL boot artifacts from the latest prebuilt CachyOS kernel
 - `rstl-pick`: Compact fuzzy search TUI picker for terminal apps (nmtui / wiremix / clipse / bluetuith / latuicon)
 - `xeo`: The `.xeo` scripting language interpreter (edition 2024)
 - `xeon`: The 'modern' package manager for `.xeo` packages
@@ -73,7 +74,19 @@ the RPM conversion.
 - `soundcraft`: Recording, editing and mixing audio; an open-source, clean-room reimplementation of Avid Pro Tools, rebuilt in pure Rust
 - `cadcraft`: Computer-aided design and drafting; an open-source, clean-room reimplementation of Autodesk AutoCAD, rebuilt in pure Rust
 
-Packages auto-track their upstream: repos with releases use the latest release tag as the version (e.g. `3.5.1`); repos without releases use `YYYYMMDD`. `resolve.sh` + `inject.sh` patch the PKGBUILD at build time, so a scheduled build picks up new upstream versions automatically — no manual bumps needed. A few packages are pinned instead (no `# auto:` marker) because an auto-track version cannot resolve correctly, e.g. `calawk` and `python-yewtube-search-python`.
+Packages auto-track their upstream: repos with releases use the latest release tag as the version (e.g. `3.5.1`); repos without releases use `YYYYMMDD`. `resolve.sh` + `inject.sh` patch the PKGBUILD at build time, so a scheduled build picks up new upstream versions automatically — no manual bumps needed. A few packages are pinned instead (no `# auto:` marker) because an auto-track version cannot resolve correctly, e.g. `calawk`, `python-yewtube-search-python`, and `linux-cachyos-frugal` (the helper downloads and builds the kernel artifacts at install time).
+
+### FRUGAL CachyOS kernel
+
+`linux-cachyos-frugal` installs a small helper and a pacman hook.  On install
+(or after a `linux-cachyos` upgrade) it downloads the latest prebuilt CachyOS
+kernel package, builds `vmlinuz`, `initrd.gz`, and `00modules.sfs`, and writes
+them to `<FRUGALS>/BOOT/<kernelver>/`.  The generated initrd can use
+`02modules.new` / `03firmware.new` in place of the original layer files, so
+installing a new CachyOS kernel does not require switching profile links or
+boot entries.  The FRUGAL profile is discovered from the running overlay,
+`w_bootfrom`, and mounted `FRUGALS` directories — never from a fixed mount
+path.  See `pkgbuilds/linux-cachyos-frugal/README.md` for details.
 
 ## usage — Arch (pacman)
 

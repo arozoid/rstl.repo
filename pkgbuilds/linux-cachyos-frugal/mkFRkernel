@@ -1,0 +1,262 @@
+#!/bin/sh
+# mkFRkernel — build a FRUGAL-compatible initrd from a kernel module tree.
+#
+# This is a standalone rework of FRmake_initrd.sh, adapted so that it can
+# operate on an unpacked kernel package without installing anything into the
+# host's /lib/modules and without creating device nodes as an unprivileged
+# user.
+#
+# Copyright (c) 2026 arozoid (modifications)
+# Revised: 23 Oct 2026; License: GPLv3
+#
+# Copyright (c) 2022 wiak (for FRmake_initrd.sh)
+# Revised: 22 Oct 2023; Original license: MIT
+#
+# Copyright (c) 2012 Tomas M (for initramfs_create)
+# Original license: GPLv2
+
+set -u
+set -o pipefail
+
+run_dir=$(pwd)
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+stage=
+wsdir=
+
+usage() {
+    cat <<'EOF'
+Usage: mkFRkernel [initrd|latest] [rootfs-dir] [gz|xz|zst]
+
+  initrd  : a compressed initrd filename, or "latest" to download the
+            FirstRib skeleton initrd from the network
+  rootfs  : directory holding usr/lib/modules (or lib/modules)
+  zst/xz  : optional final compression; default is gz
+EOF
+}
+
+cleanup() {
+    [ -n "$stage" ] && rm -rf "$stage"
+    [ -n "$wsdir" ] && rm -rf "$wsdir"
+}
+trap cleanup EXIT HUP INT TERM
+
+case "${1:-}" in
+    "")            usage; exit 1 ;;
+    --version)     echo "mkFRkernel 1.1.0"; exit 0 ;;
+    -h|-H|--help)  usage; exit 0 ;;
+    -*)            echo "unknown option: $1" >&2; exit 1 ;;
+esac
+
+compression_out=${3:-gz}
+initramfs=$1
+rootfs=${2:-firstrib_rootfs}
+
+if [ "$initramfs" = latest ]; then
+    initramfs=$run_dir/initrd-latest.gz
+    if [ ! -f "$initramfs" ]; then
+        echo "[*] downloading FirstRib skeleton initrd" >&2
+        curl -fL --retry 2 -o "$initramfs" \
+            "https://gitlab.com/firstrib/firstrib/-/raw/master/latest/build_system/initrd-latest.gz" ||
+            { echo "failed to download initrd-latest.gz" >&2; exit 1; }
+    fi
+fi
+
+case "$initramfs" in
+    /*) ;;
+    *) initramfs=$run_dir/$initramfs ;;
+esac
+[ -f "$initramfs" ] || { echo "initrd not found: $initramfs" >&2; exit 1; }
+
+[ -d "$rootfs" ] || { echo "rootfs directory not found: $rootfs" >&2; exit 1; }
+rootfs=$(realpath "$rootfs")
+
+moddir=$rootfs/usr/lib/modules
+[ -d "$moddir" ] || moddir=$rootfs/lib/modules
+[ -d "$moddir" ] || { echo "no module tree under $rootfs" >&2; exit 1; }
+
+kernelver=$(ls -1 "$moddir" 2>/dev/null | sort -V | tail -1)
+[ -n "$kernelver" ] || { echo "no kernel version in $moddir" >&2; exit 1; }
+src=$moddir/$kernelver
+[ -d "$src" ] || { echo "module tree not found: $src" >&2; exit 1; }
+
+initrd=$(basename "$initramfs")
+initrd=${initrd%.gz}
+initrd=${initrd%.xz}
+initrd=${initrd%.zst}
+wsdir=$run_dir/${initrd}_decompressed
+rm -rf "$wsdir"
+mkdir -p "$wsdir"
+
+echo "[*] extracting skeleton initrd" >&2
+if ! zcat "$initramfs" | cpio -idm -D "$wsdir" 2>/dev/null; then
+    echo "failed to extract $initramfs" >&2
+    exit 1
+fi
+
+# Expose the unpacked module tree under a private relative path.  This is the
+# key difference from the original script: nothing is written to /lib/modules
+# and cp --parents keeps the destination paths relative to the initrd.
+stage=$run_dir/.mkFRkernel-stage.$$
+rm -rf "$stage"
+mkdir -p "$stage/lib/modules"
+ln -s "$(realpath "$src")" "$stage/lib/modules/$kernelver" ||
+    { echo "failed to stage module tree" >&2; exit 1; }
+LMK=lib/modules/$kernelver
+INITRAMFS=$wsdir
+
+# Install the package's w_init when present.  It adds support for optional
+# 02modules.new/03firmware.new replacement layers in the FRUGAL profile.
+# The source file is named w_init.frugal so extracting initrd-latest.gz in
+# makepkg's srcdir cannot overwrite it.
+for w_init_src in "$script_dir/w_init.frugal" "$script_dir/w_init"; do
+    [ -f "$w_init_src" ] || continue
+    cp -f "$w_init_src" "$INITRAMFS/w_init"
+    chmod 0755 "$INITRAMFS/w_init"
+    echo "[*] using packaged w_init ($w_init_src)" >&2
+    break
+done
+
+rm -rf "$INITRAMFS/lib/modules"/* 2>/dev/null || true
+mkdir -p "$INITRAMFS/lib/modules"
+
+copy_including_deps() {
+    [ $# -gt 0 ] || return 0
+    f=$1
+    [ -e "$f" ] || return 0
+
+    cp -R --parents "$f" "$INITRAMFS" 2>/dev/null || true
+
+    if [ -L "$f" ]; then
+        d=$(dirname "$f")
+        l=$(readlink "$f")
+        copy_including_deps "$(cd "$d" && realpath -s "$l")"
+    fi
+
+    if [ -f "$f" ] || [ -d "$f" ]; then
+        for mod in $(find "$f" -type f 2>/dev/null |
+                     grep -E '\.ko(\.(gz|xz|zst))?$'); do
+            b=$(basename "$mod")
+            for dep in $(grep -F "/$b:" "$stage/$LMK/modules.dep" 2>/dev/null |
+                         sed 's/.*: //'); do
+                copy_including_deps "$LMK/$dep"
+            done
+        done
+    fi
+
+    shift
+    [ $# -gt 0 ] && copy_including_deps "$@"
+}
+
+# Run relative-path copies from the synthetic root.
+cd "$stage" || exit 1
+
+# Keep the initrd close to the original FRUGAL set.  The complete module tree
+# is in 00modules.sfs; the initrd only needs storage, overlay, filesystem,
+# network, and enough display support to reach the real root.
+for fs in aufs overlayfs ext2 ext3 ext4 fat nls fuse isofs ntfs ntfs3 \
+          reiserfs squashfs exfat btrfs f2fs erofs crypto; do
+    copy_including_deps "$LMK/kernel/fs/$fs"
+done
+
+# CRC32C is required by ext4 and btrfs.
+for line in $(find "$LMK/kernel" -iname '*crc32c*' 2>/dev/null); do
+    copy_including_deps "$line"
+done
+
+copy_including_deps "$LMK/kernel/drivers/staging/zsmalloc"
+copy_including_deps "$LMK/kernel/drivers/block/zram"
+copy_including_deps "$LMK/kernel/drivers/block"
+
+# USB storage and HID.
+copy_including_deps "$LMK/kernel/drivers/usb/storage"
+copy_including_deps "$LMK/kernel/drivers/usb/host"
+copy_including_deps "$LMK/kernel/drivers/usb/common"
+copy_including_deps "$LMK/kernel/drivers/usb/core"
+copy_including_deps "$LMK/kernel/drivers/hid/usbhid"
+
+# Disks, CD-ROM, NVMe, MMC, software RAID, and virtio.
+copy_including_deps "$LMK/kernel/drivers/cdrom"
+copy_including_deps "$LMK/kernel/drivers/scsi"
+copy_including_deps "$LMK/kernel/drivers/ata"
+copy_including_deps "$LMK/kernel/drivers/nvme"
+copy_including_deps "$LMK/kernel/drivers/mmc"
+copy_including_deps "$LMK/kernel/drivers/md"
+copy_including_deps "$LMK/kernel/drivers/virtio"
+
+# Ethernet is needed for network-root/fallback setups.
+copy_including_deps "$LMK/kernel/drivers/net/ethernet"
+copy_including_deps "$LMK/kernel/fs/nfs"
+
+# Intel KMS/backlight for the reference laptop; dependencies are pulled in
+# from modules.dep automatically.
+copy_including_deps "$LMK/kernel/drivers/gpu/drm/i915"
+
+copy_including_deps "$LMK/kernel/updates"
+copy_including_deps "$LMK/updates"
+
+# Module metadata needed by depmod and by the early boot scripts.
+for f in modules.builtin modules.builtin.modinfo modules.builtin.alias \
+         modules.order modules.alias modules.alias.bin modules.dep \
+         modules.dep.bin modules.devname modules.softdep modules.symbols \
+         modules.symbols.bin; do
+    copy_including_deps "$LMK/$f"
+done
+
+# A skeleton initrd should already have these, but keep the classic safety net.
+cd "$INITRAMFS" || exit 1
+if [ "$(id -u)" -eq 0 ]; then
+    mkdir -p dev proc sys
+    [ -e dev/console ] || mknod dev/console c 5 1 2>/dev/null || true
+    [ -e dev/null ]    || mknod dev/null    c 1 3 2>/dev/null || true
+    [ -e dev/ram0 ]    || mknod dev/ram0    b 1 0 2>/dev/null || true
+    for tty in 1 2 3 4; do
+        [ -e "dev/tty$tty" ] || mknod "dev/tty$tty" c 4 "$tty" 2>/dev/null || true
+    done
+fi
+
+# depmod cannot read compressed module files in this context.
+find . -name '*.ko.gz'  -exec gunzip -f {} \; 2>/dev/null || true
+find . -name '*.ko.xz'  -exec unxz -f {} \;   2>/dev/null || true
+find . -name '*.ko.zst' -exec zstd -q -d --rm {} \; 2>/dev/null || true
+
+depmod_bin=$(command -v depmod 2>/dev/null || true)
+if [ -n "$depmod_bin" ]; then
+    "$depmod_bin" -b "$INITRAMFS" "$kernelver" ||
+        { echo "depmod failed" >&2; exit 1; }
+else
+    echo "warning: depmod not found; initrd may be missing dependency data" >&2
+fi
+
+case "$compression_out" in
+    gz|gzip)
+        out=$run_dir/$initrd.img
+        if ! ( cd "$INITRAMFS" && find . -print | cpio -o -H newc 2>/dev/null |
+               gzip -9 > "$out" ); then
+            echo "failed to create $out" >&2
+            exit 1
+        fi
+        ;;
+    xz)
+        out=$run_dir/$initrd.xz
+        if ! ( cd "$INITRAMFS" && find . -print | cpio -o -H newc 2>/dev/null |
+               xz -9 > "$out" ); then
+            echo "failed to create $out" >&2
+            exit 1
+        fi
+        ;;
+    zst)
+        out=$run_dir/$initrd.zst
+        if ! ( cd "$INITRAMFS" && find . -print | cpio -o -H newc 2>/dev/null |
+               zstd -q -19 -T0 -o "$out" ); then
+            echo "failed to create $out" >&2
+            exit 1
+        fi
+        ;;
+    *)
+        echo "unsupported compression: $compression_out" >&2
+        exit 1
+        ;;
+esac
+
+echo "[*] wrote $out" >&2
+exit 0

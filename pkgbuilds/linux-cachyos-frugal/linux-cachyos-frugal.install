@@ -1,0 +1,21 @@
+post_install() {
+    # The package is useful even on systems without FRUGAL.  --auto makes this
+    # a quick no-op when no profile can be discovered, and the script falls
+    # back to the installed kernel if the CachyOS mirror is unreachable.
+    if [ -x /usr/bin/linux-cachyos-frugal ]; then
+        /usr/bin/linux-cachyos-frugal --auto --source latest ||
+            printf 'linux-cachyos-frugal: initial FRUGAL install was not completed\n' >&2
+    fi
+}
+
+post_upgrade() {
+    post_install
+}
+
+pre_remove() {
+    :
+}
+
+post_remove() {
+    :
+}

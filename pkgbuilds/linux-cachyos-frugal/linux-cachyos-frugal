@@ -1,0 +1,1027 @@
+#!/usr/bin/env bash
+#
+# linux-cachyos-frugal — turn the latest prebuilt CachyOS kernel package into
+# a FirstRib/FRUGAL kernel set and deploy it into the FRUGAL profile that is
+# actually in use.
+#
+# No CachyOS source tree is involved.  The package is downloaded from the
+# CachyOS binary repository, unpacked in a temporary directory, and used to
+# produce:
+#
+#   vmlinuz
+#   initrd.gz
+#   00modules.sfs
+#   readme_kernel_version.txt
+#
+# The FRUGAL profile is discovered from the running overlay and/or from
+# mounted FRUGAL filesystems.  There is deliberately no default path such as
+# /mnt/sda2/@/FRUGALS.
+
+set -euo pipefail
+
+PROG=${0##*/}
+SELF_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+
+if [ -f "$SELF_DIR/mkFRkernel" ]; then
+    LIBDIR=$SELF_DIR
+else
+    LIBDIR=${LINUX_CACHYOS_FRUGAL_LIBDIR:-/usr/lib/linux-cachyos-frugal}
+fi
+
+CONFIG=${LINUX_CACHYOS_FRUGAL_CONFIG:-/etc/linux-cachyos-frugal.conf}
+STATE_DIR=${LINUX_CACHYOS_FRUGAL_STATE:-/var/lib/linux-cachyos-frugal}
+DEFAULT_CACHE=/var/cache/linux-cachyos-frugal
+if [ "$(id -u)" -ne 0 ]; then
+    DEFAULT_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/linux-cachyos-frugal
+fi
+CACHE_DIR=${LINUX_CACHYOS_FRUGAL_CACHE:-$DEFAULT_CACHE}
+
+MODE=install
+SOURCE=auto
+PROFILE_ARG=
+FRUGALS_ROOT_ARG=
+BUILD_DIR_ARG=
+KERNEL_PKG_ARG=
+INITRD_SKELETON_ARG=
+MIRROR_ARG=
+ARCH_ARG=
+REPO_ARG=
+AUTO=0
+NO_ACTIVATE=0
+NEW_LAYERS=1
+FORCE=0
+DRY_RUN=0
+KEEP_WORK=0
+
+usage() {
+    cat <<'EOF'
+Usage: linux-cachyos-frugal [COMMAND] [OPTIONS]
+
+Build FRUGAL boot artifacts from the latest prebuilt CachyOS kernel and
+install them into an existing FRUGAL profile.
+
+Commands:
+  install             Build and deploy (default)
+  detect              Print the FRUGAL profile that would be used
+  list                List detected FRUGAL profiles
+  build               Build artifacts only; do not touch FRUGAL
+
+Options:
+  --frugal-dir DIR    FRUGAL profile, or the FRUGALS directory to scan
+  --frugals-root DIR  FRUGALS directory to scan
+  --source MODE       latest (default), installed, or auto
+  --from-installed    Alias for --source installed
+  --kernel PKG        Use a local linux-cachyos .pkg.tar.zst instead
+  --initrd FILE       Skeleton initrd.gz (default: bundled initrd-latest.gz)
+  --build-dir DIR     Keep generated artifacts in DIR
+  --cache-dir DIR     Package cache (default: /var/cache/linux-cachyos-frugal)
+  --mirror URL        CachyOS mirror root (repeatable via comma separation)
+  --arch ARCH         CachyOS architecture (x86_64_v3 or x86_64)
+  --repo REPO         CachyOS repository (cachyos-v3 or cachyos)
+  --no-activate       Deploy into BOOT, but do not repoint the profile
+  --new-layers        Use 02modules.new/03firmware.new (default)
+  --legacy-links      Repoint 00modules.sfs/01firmware.sfs instead
+  --force             Rebuild/replace even if the version is already present
+  --dry-run           Show what would happen without downloading or writing
+  --auto              Exit quietly if no FRUGAL profile is found
+  --keep-work         Keep the temporary work directory
+  -h, --help          Show this help
+EOF
+}
+
+log()  { printf '%s: %s\n' "$PROG" "$*" >&2; }
+warn() { printf '%s: warning: %s\n' "$PROG" "$*" >&2; }
+die()  { printf '%s: error: %s\n' "$PROG" "$*" >&2; exit 1; }
+
+# Read user configuration before parsing the command line.  Command-line
+# options below take precedence.
+if [ -r "$CONFIG" ]; then
+    # shellcheck disable=SC1090
+    . "$CONFIG"
+fi
+
+# Environment/config overrides.  Command-line options parsed below still win.
+PROFILE_ARG=${FRUGAL_DIR:-${PROFILE_ARG:-}}
+FRUGALS_ROOT_ARG=${FRUGALS_ROOT:-${FRUGALS_ROOT_ARG:-}}
+
+while (($#)); do
+    case "$1" in
+        install|detect|list|build)
+            MODE=$1
+            shift
+            ;;
+        --frugal-dir)
+            PROFILE_ARG=${2:?--frugal-dir needs a directory}
+            shift 2
+            ;;
+        --frugal-dir=*)
+            PROFILE_ARG=${1#*=}
+            shift
+            ;;
+        --frugals-root)
+            FRUGALS_ROOT_ARG=${2:?--frugals-root needs a directory}
+            shift 2
+            ;;
+        --frugals-root=*)
+            FRUGALS_ROOT_ARG=${1#*=}
+            shift
+            ;;
+        --source)
+            SOURCE=${2:?--source needs latest, installed or auto}
+            shift 2
+            ;;
+        --source=*)
+            SOURCE=${1#*=}
+            shift
+            ;;
+        --from-installed)
+            SOURCE=installed
+            shift
+            ;;
+        --kernel)
+            KERNEL_PKG_ARG=${2:?--kernel needs a package path}
+            shift 2
+            ;;
+        --kernel=*)
+            KERNEL_PKG_ARG=${1#*=}
+            shift
+            ;;
+        --initrd)
+            INITRD_SKELETON_ARG=${2:?--initrd needs a file}
+            shift 2
+            ;;
+        --initrd=*)
+            INITRD_SKELETON_ARG=${1#*=}
+            shift
+            ;;
+        --build-dir)
+            BUILD_DIR_ARG=${2:?--build-dir needs a directory}
+            shift 2
+            ;;
+        --build-dir=*)
+            BUILD_DIR_ARG=${1#*=}
+            shift
+            ;;
+        --cache-dir)
+            CACHE_DIR=${2:?--cache-dir needs a directory}
+            shift 2
+            ;;
+        --cache-dir=*)
+            CACHE_DIR=${1#*=}
+            shift
+            ;;
+        --mirror)
+            MIRROR_ARG=${2:?--mirror needs a URL}
+            shift 2
+            ;;
+        --mirror=*)
+            MIRROR_ARG=${1#*=}
+            shift
+            ;;
+        --arch)
+            ARCH_ARG=${2:?--arch needs an architecture}
+            shift 2
+            ;;
+        --arch=*)
+            ARCH_ARG=${1#*=}
+            shift
+            ;;
+        --repo)
+            REPO_ARG=${2:?--repo needs a repository name}
+            shift 2
+            ;;
+        --repo=*)
+            REPO_ARG=${1#*=}
+            shift
+            ;;
+        --no-activate) NO_ACTIVATE=1; shift ;;
+        --new-layers)  NEW_LAYERS=1; shift ;;
+        --legacy-links) NEW_LAYERS=0; shift ;;
+        --force)       FORCE=1; shift ;;
+        --dry-run)     DRY_RUN=1; shift ;;
+        --auto)        AUTO=1; shift ;;
+        --keep-work)   KEEP_WORK=1; shift ;;
+        --version)
+            printf '%s 0.2.0\n' "$PROG"
+            exit 0
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            die "unknown option: $1 (try --help)"
+            ;;
+        *)
+            die "unknown command or argument: $1 (try --help)"
+            ;;
+    esac
+done
+
+[[ $SOURCE =~ ^(latest|installed|auto)$ ]] || die "invalid --source: $SOURCE"
+
+# ---------------------------------------------------------------------------
+# FRUGAL discovery
+# ---------------------------------------------------------------------------
+
+decode_mount_path() {
+    local s=$1
+    s=${s//\\040/ }
+    s=${s//\\011/$'\t'}
+    s=${s//\\012/$'\n'}
+    s=${s//\\134/\\}
+    printf '%s' "$s"
+}
+
+mountpoints() {
+    command -v findmnt >/dev/null 2>&1 || die "findmnt is required (util-linux)"
+    findmnt -rn -o TARGET 2>/dev/null | awk '!seen[$0]++'
+}
+
+is_profile() {
+    local p=$1
+    [ -d "$p" ] || return 1
+    [ -e "$p/00modules.sfs" ] || [ -e "$p/02modules.new" ] || return 1
+    [ -e "$p/vmlinuz" ] || return 1
+    [ -e "$p/initrd.gz" ] || return 1
+    # A versioned BOOT directory also has vmlinuz/initrd/00modules.sfs.  A
+    # profile additionally owns (or symlinks) an overlay and/or rootfs layer.
+    if [ -e "$p/upper_changes" ] || [ -e "$p/07rootfs" ] || [ -e "$p/rootfs" ]; then
+        return 0
+    fi
+    return 1
+}
+
+profile_is_cachyos() {
+    local p=$1 target
+    target=$(readlink -f "$p/readme_kernel_version.txt" 2>/dev/null || true)
+    case "$target" in *cachyos*) return 0 ;; esac
+    if [ -r "$p/readme_kernel_version.txt" ] &&
+       grep -qi cachyos "$p/readme_kernel_version.txt" 2>/dev/null; then
+        return 0
+    fi
+    target=$(readlink -f "$p/vmlinuz" 2>/dev/null || true)
+    case "$target" in *cachyos*) return 0 ;; esac
+    target=$(readlink -f "$p/00modules.sfs" 2>/dev/null || true)
+    case "$target" in *cachyos*) return 0 ;; esac
+    return 1
+}
+
+profile_from_upperdir() {
+    local line field upper p
+    while IFS= read -r line; do
+        upper=
+        for field in $line; do
+            case "$field" in
+                upperdir=*) upper=${field#upperdir=} ;;
+            esac
+        done
+        [ -n "$upper" ] || continue
+        upper=$(decode_mount_path "$upper")
+        [ "$(basename "$upper")" = upper_changes ] || continue
+        p=$(dirname "$upper")
+        if is_profile "$p"; then
+            printf '%s\n' "$p"
+        fi
+    done < /proc/self/mountinfo
+}
+
+cmdline_value() {
+    local key=$1 arg
+    for arg in $(cat /proc/cmdline 2>/dev/null); do
+        case "$arg" in
+            "$key"=*) printf '%s\n' "${arg#*=}"; return 0 ;;
+        esac
+    done
+    return 1
+}
+
+profile_from_cmdline() {
+    local value path dev mp cand
+    value=$(cmdline_value w_bootfrom) || return 0
+    [ -n "$value" ] || return 0
+
+    # w_bootfrom is commonly:
+    #   w_bootfrom=UUID=<uuid>=/@/FRUGALS/rstl.sway
+    #   w_bootfrom=/dev/sda2=/@/FRUGALS/rstl.sway
+    # Strip the source and keep the path after the final '='.
+    path=${value#*=}
+    [ -n "$path" ] || return 0
+
+    while IFS= read -r mp; do
+        for cand in "$mp$path" "$mp/${path#/}"; do
+            if is_profile "$cand"; then
+                printf '%s\n' "$cand"
+            fi
+        done
+    done < <(mountpoints)
+
+    dev=${value%%=*}
+    case "$dev" in
+        UUID=*)     dev=/dev/disk/by-uuid/${dev#UUID=} ;;
+        PARTUUID=*) dev=/dev/disk/by-partuuid/${dev#PARTUUID=} ;;
+        LABEL=*)    dev=/dev/disk/by-label/${dev#LABEL=} ;;
+    esac
+    [ -e "$dev" ] || return 0
+    mp=$(findmnt -rn -S "$dev" -o TARGET 2>/dev/null | head -1 || true)
+    [ -n "$mp" ] || return 0
+    for cand in "$mp$path" "$mp/${path#/}"; do
+        if is_profile "$cand"; then
+            printf '%s\n' "$cand"
+        fi
+    done
+}
+
+scan_frugals_roots() {
+    local mp base
+    while IFS= read -r mp; do
+        case "$mp" in
+            /proc|/proc/*|/sys|/sys/*|/dev|/dev/*|/run|/run/*|/tmp|/tmp/*|/var/tmp|/var/tmp/*)
+                continue
+                ;;
+        esac
+        for base in "$mp" "$mp/@" "$mp/root" "$mp/root/@"; do
+            [ -d "$base/FRUGALS" ] && printf '%s\n' "$base/FRUGALS"
+        done
+        # Do not assume the FRUGALS directory is directly under the mount.
+        find "$mp" -maxdepth 4 -type d -name FRUGALS -print 2>/dev/null || true
+    done < <(mountpoints) | sort -u
+}
+
+profiles_in_root() {
+    local root=$1 d
+    [ -d "$root" ] || return 0
+    for d in "$root"/*; do
+        [ -d "$d" ] || continue
+        is_profile "$d" && printf '%s\n' "$d"
+    done
+}
+
+add_candidates() {
+    local p
+    for p in "$@"; do
+        [ -n "$p" ] || continue
+        is_profile "$p" && printf '%s\n' "$p"
+    done
+}
+
+choose_profile() {
+    local -a candidates=()
+    local active= chosen= c root
+
+    # Explicit profile wins, even if it is a non-CachyOS fallback.
+    if [ -n "$PROFILE_ARG" ]; then
+        if is_profile "$PROFILE_ARG"; then
+            printf '%s\n' "$PROFILE_ARG"
+            return 0
+        fi
+        if [ -d "$PROFILE_ARG/FRUGALS" ]; then
+            root=$PROFILE_ARG/FRUGALS
+        elif [ -d "$PROFILE_ARG" ] && profiles_in_root "$PROFILE_ARG" | grep -q .; then
+            root=$PROFILE_ARG
+        else
+            die "--frugal-dir is not a FRUGAL profile or FRUGALS directory: $PROFILE_ARG"
+        fi
+        mapfile -t candidates < <(profiles_in_root "$root" | sort -u)
+    else
+        active=$(profile_from_upperdir | head -1 || true)
+        mapfile -t candidates < <(
+            {
+                [ -n "$active" ] && printf '%s\n' "$active"
+                profile_from_cmdline
+                if [ -n "$FRUGALS_ROOT_ARG" ]; then
+                    profiles_in_root "$FRUGALS_ROOT_ARG"
+                else
+                    while IFS= read -r root; do
+                        profiles_in_root "$root"
+                    done < <(scan_frugals_roots)
+                fi
+                if [ -r "$STATE_DIR/profile" ]; then
+                    cat "$STATE_DIR/profile"
+                fi
+            } | sort -u
+        )
+    fi
+
+    # Remove duplicates while preserving the first occurrence.
+    if [ "${#candidates[@]}" -gt 0 ]; then
+        mapfile -t candidates < <(printf '%s\n' "${candidates[@]}" | awk '!seen[$0]++')
+    fi
+
+    if [ "${#candidates[@]}" -eq 0 ]; then
+        if [ "$AUTO" -eq 1 ] || [ "$MODE" = build ]; then
+            return 1
+        fi
+        die "no FRUGAL profile found (use --frugal-dir or --frugals-root)"
+    fi
+
+    # If the currently booted profile is CachyOS, keep using it.  Otherwise
+    # prefer a CachyOS profile over a fallback profile, even when the fallback
+    # is the one currently booted.  "rstl.sway" is the conventional main
+    # profile; use it only as a tie-breaker between CachyOS profiles.
+    if [ -n "$active" ]; then
+        for c in "${candidates[@]}"; do
+            if [ "$c" = "$active" ] && profile_is_cachyos "$c"; then
+                chosen=$c
+                break
+            fi
+        done
+    fi
+    if [ -z "$chosen" ]; then
+        for c in "${candidates[@]}"; do
+            if [ "$(basename "$c")" = rstl.sway ] && profile_is_cachyos "$c"; then
+                chosen=$c
+                break
+            fi
+        done
+    fi
+    if [ -z "$chosen" ]; then
+        for c in "${candidates[@]}"; do
+            if profile_is_cachyos "$c"; then
+                chosen=$c
+                break
+            fi
+        done
+    fi
+    if [ -z "$chosen" ] && [ -n "$active" ]; then
+        for c in "${candidates[@]}"; do
+            if [ "$c" = "$active" ]; then
+                chosen=$c
+                break
+            fi
+        done
+    fi
+    [ -n "$chosen" ] || chosen=${candidates[0]}
+
+    if [ "${#candidates[@]}" -gt 1 ]; then
+        warn "multiple FRUGAL profiles found; using $chosen"
+        warn "candidates: ${candidates[*]}"
+    fi
+    printf '%s\n' "$chosen"
+}
+
+list_profiles() {
+    local active c tags
+    active=$(profile_from_upperdir | head -1 || true)
+    {
+        [ -n "$active" ] && printf '%s\n' "$active"
+        if [ -n "$FRUGALS_ROOT_ARG" ]; then
+            profiles_in_root "$FRUGALS_ROOT_ARG"
+        else
+            while IFS= read -r root; do
+                profiles_in_root "$root"
+            done < <(scan_frugals_roots)
+        fi
+        if [ -r "$STATE_DIR/profile" ]; then
+            cat "$STATE_DIR/profile"
+        fi
+    } | sort -u | while IFS= read -r c; do
+        is_profile "$c" || continue
+        tags=
+        if [ "$c" = "$active" ]; then
+            tags="$tags (active)"
+        fi
+        if profile_is_cachyos "$c"; then
+            tags="$tags (cachyos)"
+        fi
+        printf '%s%s\n' "$c" "$tags"
+    done
+}
+
+# ---------------------------------------------------------------------------
+# CachyOS prebuilt package selection
+# ---------------------------------------------------------------------------
+
+detect_arch() {
+    if [ -n "$ARCH_ARG" ]; then
+        printf '%s\n' "$ARCH_ARG"
+        return 0
+    fi
+    if command -v pacman >/dev/null 2>&1; then
+        local a
+        a=$(pacman -Qi linux-cachyos 2>/dev/null |
+            awk -F': ' '/^Architecture[[:space:]]*:/ {print $2; exit}')
+        case "$a" in
+            x86_64_v3|x86_64) printf '%s\n' "$a"; return 0 ;;
+        esac
+        a=$(pacman -Qi linux-cachyos-lts 2>/dev/null |
+            awk -F': ' '/^Architecture[[:space:]]*:/ {print $2; exit}')
+        case "$a" in
+            x86_64_v3|x86_64) printf '%s\n' "$a"; return 0 ;;
+        esac
+    fi
+    local flags
+    flags=$(grep -m1 '^flags' /proc/cpuinfo 2>/dev/null || true)
+    for f in avx2 bmi1 bmi2 fma movbe f16c; do
+        case " $flags " in
+            *" $f "*) ;;
+            *) printf 'x86_64\n'; return 0 ;;
+        esac
+    done
+    printf 'x86_64_v3\n'
+}
+
+detect_repo() {
+    if [ -n "$REPO_ARG" ]; then
+        printf '%s\n' "$REPO_ARG"
+    elif [ "$(detect_arch)" = x86_64_v3 ]; then
+        printf 'cachyos-v3\n'
+    else
+        printf 'cachyos\n'
+    fi
+}
+
+mirror_list() {
+    local arch repo f m
+    arch=$(detect_arch)
+    repo=$(detect_repo)
+    if [ -n "$MIRROR_ARG" ]; then
+        printf '%s\n' "$MIRROR_ARG" | tr ',' '\n' | sed '/^$/d'
+        return 0
+    fi
+    for m in \
+        https://cdn77.cachyos.org/repo \
+        https://us.cachyos.org/repo \
+        https://mirror.lesviallon.fr/cachy/repo \
+        https://no.mirror.cx/cachyos/repo \
+        https://nl.mirror.cx/cachyos/repo \
+        https://at.cachyos.org/repo \
+        https://mirror.mergedcloud.de/cachyos/repo \
+        https://mirrors.ustc.edu.cn/cachyos/repo; do
+        printf '%s\n' "$m"
+    done
+    for f in /etc/pacman.d/cachyos-v3-mirrorlist /etc/pacman.d/cachyos-mirrorlist; do
+        [ -r "$f" ] || continue
+        sed -n 's/^Server[[:space:]]*=[[:space:]]*//p' "$f" |
+            sed "s#\$arch_v3#$arch#g; s#\$arch#$arch#g; s#\$repo#$repo#g"
+    done
+}
+
+cachyos_db_for() {
+    local db=$1 arch repo base url
+    arch=$(detect_arch)
+    repo=$(detect_repo)
+    while IFS= read -r base; do
+        [ -n "$base" ] || continue
+        base=${base%/}
+        url="$base/$arch/$repo/$repo.db"
+        if curl -fsSL --retry 2 --connect-timeout 8 --max-time 60 -o "$db" "$url"; then
+            return 0
+        fi
+    done < <(mirror_list)
+    return 1
+}
+
+latest_cachyos_info() {
+    local db=$1 entry desc filename version sha
+    entry=$(bsdtar -tf "$db" 2>/dev/null |
+        sed -n 's#^\(linux-cachyos-[0-9][^/]*\)/desc$#\1#p' |
+        sort -V | tail -1)
+    [ -n "$entry" ] || return 1
+    desc=$(bsdtar -xOf "$db" "$entry/desc" 2>/dev/null) || return 1
+    filename=$(printf '%s\n' "$desc" |
+        awk '/^%FILENAME%$/ {getline; print; exit}')
+    version=${entry#linux-cachyos-}
+    sha=$(printf '%s\n' "$desc" |
+        awk '/^%SHA256SUM%$/ {getline; print; exit}')
+    [ -n "$filename" ] || return 1
+    printf '%s\t%s\t%s\t%s\n' "$version" "$filename" "$sha" "$desc"
+}
+
+download_cachyos_package() {
+    local filename=$1 sha=$2 file base arch repo url
+    file=$CACHE_DIR/$filename
+    mkdir -p "$CACHE_DIR"
+    if [ -f "$file" ] && [ -n "$sha" ]; then
+        if ! printf '%s  %s\n' "$sha" "$file" | sha256sum -c - >/dev/null 2>&1; then
+            warn "cached package checksum mismatch; removing $file"
+            rm -f "$file"
+        fi
+    fi
+    if [ ! -f "$file" ]; then
+        arch=$(detect_arch)
+        repo=$(detect_repo)
+        while IFS= read -r base; do
+            [ -n "$base" ] || continue
+            base=${base%/}
+            url="$base/$arch/$repo/$filename"
+            log "downloading $url"
+            if curl -fL --retry 2 --connect-timeout 10 -o "$file.part" "$url"; then
+                mv -f "$file.part" "$file"
+                break
+            fi
+            rm -f "$file.part"
+        done < <(mirror_list)
+    fi
+    [ -f "$file" ] || return 1
+    if [ -n "$sha" ]; then
+        printf '%s  %s\n' "$sha" "$file" | sha256sum -c - >/dev/null 2>&1 ||
+            die "checksum verification failed for $file"
+    fi
+    printf '%s\n' "$file"
+}
+
+find_modules_dir() {
+    local root=$1 d
+    for d in "$root"/usr/lib/modules/*; do
+        [ -d "$d" ] || continue
+        [ -f "$d/vmlinuz" ] || continue
+        [ -f "$d/modules.dep" ] || continue
+        printf '%s\n' "$d"
+        return 0
+    done
+    return 1
+}
+
+installed_kernel_dir() {
+    local pkgver d
+    command -v pacman >/dev/null 2>&1 || return 1
+    pkgver=$(pacman -Q linux-cachyos 2>/dev/null | awk '{print $2}') || return 1
+    [ -n "$pkgver" ] || return 1
+    for d in "/usr/lib/modules/${pkgver}-cachyos" "/usr/lib/modules/${pkgver}"*; do
+        [ -d "$d" ] || continue
+        [ -f "$d/vmlinuz" ] || continue
+        [ -f "$d/modules.dep" ] || continue
+        printf '%s\t%s\n' "$pkgver" "$d"
+        return 0
+    done
+    return 1
+}
+
+# Prepares a source and prints: pkgver<TAB>kernelver<TAB>modules-dir
+prepare_source() {
+    local kind=$1 work=$2 info version filename sha desc pkg root d
+    case "$kind" in
+        latest)
+            if [ ! -s "$work/cachyos.db" ]; then
+                cachyos_db_for "$work/cachyos.db" || return 1
+            fi
+            info=$(latest_cachyos_info "$work/cachyos.db") || return 1
+            IFS=$'\t' read -r version filename sha desc <<< "$info"
+            pkg=$(download_cachyos_package "$filename" "$sha") || return 1
+            root=$work/pkg
+            rm -rf "$root"
+            mkdir -p "$root"
+            bsdtar -xf "$pkg" -C "$root" || return 1
+            d=$(find_modules_dir "$root") || return 1
+            printf '%s\t%s\t%s\n' "$version" "$(basename "$d")" "$d"
+            ;;
+        installed)
+            info=$(installed_kernel_dir) || return 1
+            IFS=$'\t' read -r version d <<< "$info"
+            printf '%s\t%s\t%s\n' "$version" "$(basename "$d")" "$d"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Artifact build
+# ---------------------------------------------------------------------------
+
+build_modules_sfs() {
+    local moddir=$1 out=$2 stage
+    stage=$(mktemp -d "${TMPDIR:-/tmp}/linux-cachyos-frugal-sfs.XXXXXX")
+    mkdir -p "$stage/usr/lib/modules"
+    cp -a --reflink=auto "$moddir" "$stage/usr/lib/modules/" ||
+        die "failed to stage modules for 00modules.sfs"
+    # The kernel image is stored separately in the profile.
+    rm -f "$stage/usr/lib/modules/$(basename "$moddir")/vmlinuz"
+    rm -f "$stage/usr/lib/modules/$(basename "$moddir")/build"
+    rm -f "$stage/usr/lib/modules/$(basename "$moddir")/source"
+    mksquashfs "$stage" "$out/00modules.sfs" \
+        -comp gzip -b 1M -noappend -no-progress >/dev/null ||
+        die "mksquashfs failed"
+    rm -rf "$stage"
+}
+
+build_artifacts() {
+    local pkgver=$1 kernelver=$2 moddir=$3 out=$4 work=$5
+    local stage_root builddir skeleton
+    mkdir -p "$out"
+
+    stage_root=$work/stage-root
+    rm -rf "$stage_root"
+    mkdir -p "$stage_root/usr/lib/modules"
+    ln -s "$(realpath "$moddir")" "$stage_root/usr/lib/modules/$kernelver"
+
+    cp -a --reflink=auto "$moddir/vmlinuz" "$out/vmlinuz" ||
+        die "failed to copy vmlinuz"
+    chmod 0644 "$out/vmlinuz"
+
+    log "building 00modules.sfs ($kernelver)"
+    build_modules_sfs "$(realpath "$moddir")" "$out"
+
+    skeleton=${INITRD_SKELETON_ARG:-$LIBDIR/initrd-latest.gz}
+    [ -f "$skeleton" ] || die "skeleton initrd not found: $skeleton"
+    [ -x "$LIBDIR/mkFRkernel" ] || die "mkFRkernel not found: $LIBDIR/mkFRkernel"
+
+    builddir=$work/initrd-build
+    rm -rf "$builddir"
+    mkdir -p "$builddir"
+    cp -a "$skeleton" "$builddir/initrd-latest.gz"
+    log "building initrd.gz ($kernelver)"
+    ( cd "$builddir" && "$LIBDIR/mkFRkernel" initrd-latest.gz "$stage_root" gz ) ||
+        die "mkFRkernel failed"
+    [ -f "$builddir/initrd-latest.img" ] || die "mkFRkernel produced no initrd"
+    mv -f "$builddir/initrd-latest.img" "$out/initrd.gz"
+    chmod 0644 "$out/initrd.gz"
+
+    cat > "$out/readme_kernel_version.txt" <<EOF
+$kernelver
+CachyOS prebuilt linux-cachyos $pkgver
+Generated by $PROG
+EOF
+    chmod 0644 "$out/readme_kernel_version.txt"
+
+    [ -s "$out/vmlinuz" ] || die "vmlinuz is empty"
+    [ -s "$out/initrd.gz" ] || die "initrd.gz is empty"
+    [ -s "$out/00modules.sfs" ] || die "00modules.sfs is empty"
+}
+
+# ---------------------------------------------------------------------------
+# Deployment
+# ---------------------------------------------------------------------------
+
+profile_points_to_version() {
+    local profile=$1 ver=$2 link target
+    if [ "$NEW_LAYERS" -eq 1 ]; then
+        link=$profile/02modules.new
+    else
+        link=$profile/00modules.sfs
+    fi
+    target=$(readlink -f "$link" 2>/dev/null || true)
+    case "$target" in
+        */BOOT/"$ver"/*) ;;
+        *) return 1 ;;
+    esac
+    target=$(readlink -f "$profile/vmlinuz" 2>/dev/null || true)
+    case "$target" in
+        */BOOT/"$ver"/*) ;;
+        *) return 1 ;;
+    esac
+    if [ "$NEW_LAYERS" -eq 0 ]; then
+        # A legacy deployment must not be shadowed by replacement links left
+        # by an earlier --new-layers run.
+        for link in 02modules.new 03firmware.new; do
+            target=$(readlink -f "$profile/$link" 2>/dev/null || true)
+            case "$target" in
+                */BOOT/*) return 1 ;;
+            esac
+        done
+    fi
+    return 0
+}
+
+deploy_artifacts() {
+    local profile=$1 pkgver=$2 kernelver=$3 out=$4
+    local root boot dest tmp old f target managed
+    root=$(dirname "$profile")
+    boot=$root/BOOT
+    dest=$boot/$kernelver
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+        log "dry-run: would deploy $kernelver to $dest"
+        log "dry-run: would point $profile/vmlinuz and initrd.gz at ../BOOT/$kernelver"
+        if [ "$NEW_LAYERS" -eq 1 ]; then
+            log "dry-run: would create $profile/02modules.new (and 03firmware.new if available)"
+        else
+            log "dry-run: would repoint $profile/00modules.sfs"
+        fi
+        return 0
+    fi
+
+    if [ "$FORCE" -eq 0 ] && profile_points_to_version "$profile" "$kernelver"; then
+        log "$profile already points at $kernelver; nothing to do"
+        return 0
+    fi
+
+    if [ "$NEW_LAYERS" -eq 1 ] && [ "$FORCE" -eq 0 ] &&
+       [ -e "$profile/02modules.new" ]; then
+        target=$(readlink -f "$profile/02modules.new" 2>/dev/null || true)
+        case "$target" in
+            */BOOT/*) ;;
+            *)
+                die "$profile/02modules.new exists but is not managed by this package; move it away or use --force"
+                ;;
+        esac
+    fi
+
+    mkdir -p "$boot"
+    tmp=$boot/.${kernelver}.new.$$
+    rm -rf "$tmp"
+    mkdir -p "$tmp"
+    cp -a "$out/vmlinuz" "$out/initrd.gz" "$out/00modules.sfs" \
+          "$out/readme_kernel_version.txt" "$tmp/"
+    chmod 0644 "$tmp/vmlinuz" "$tmp/initrd.gz" "$tmp/00modules.sfs" \
+               "$tmp/readme_kernel_version.txt"
+    if [ -e "$root/BOOT/01firmware.sfs" ]; then
+        ln -sfn ../01firmware.sfs "$tmp/01firmware.sfs"
+    fi
+
+    # Record the previous profile links before replacing them.
+    managed="vmlinuz initrd.gz readme_kernel_version.txt 02modules.new 03firmware.new"
+    [ "$NEW_LAYERS" -eq 1 ] || managed="$managed 00modules.sfs"
+    {
+        printf '#!/bin/sh\n'
+        printf '# Generated by linux-cachyos-frugal; restores the previous kernel links.\n'
+        printf 'cd %q || exit 1\n' "$profile"
+        for f in $managed; do
+            if [ -L "$profile/$f" ]; then
+                target=$(readlink "$profile/$f")
+                printf 'ln -sfn %q %q\n' "$target" "$f"
+            elif [ -e "$profile/$f" ]; then
+                printf '# %s was a regular file; not overwritten by this restore script\n' "$f"
+            else
+                printf 'rm -f %q\n' "$f"
+            fi
+        done
+        printf 'sync\n'
+    } > "$tmp/restore-previous.sh"
+    chmod 0755 "$tmp/restore-previous.sh"
+
+    if [ -e "$dest" ]; then
+        old=$boot/.${kernelver}.old.$$
+        rm -rf "$old"
+        mv "$dest" "$old"
+    fi
+    mv "$tmp" "$dest"
+    [ -n "${old:-}" ] && rm -rf "$old"
+
+    if [ "$NO_ACTIVATE" -eq 0 ]; then
+        ln -sfn "../BOOT/$kernelver/vmlinuz" "$profile/vmlinuz"
+        ln -sfn "../BOOT/$kernelver/initrd.gz" "$profile/initrd.gz"
+        ln -sfn "../BOOT/$kernelver/readme_kernel_version.txt" \
+            "$profile/readme_kernel_version.txt"
+        if [ "$NEW_LAYERS" -eq 1 ]; then
+            # Keep 00modules.sfs and 01firmware.sfs untouched.  The patched
+            # initrd prefers these replacement names and falls back to the
+            # original layers if they are absent or cannot be mounted.
+            ln -sfn "../BOOT/$kernelver/00modules.sfs" "$profile/02modules.new"
+            if [ -e "$boot/$kernelver/01firmware.sfs" ] &&
+               [ ! -e "$profile/03firmware.new" ]; then
+                ln -sfn "../BOOT/$kernelver/01firmware.sfs" "$profile/03firmware.new"
+            fi
+        else
+            # Remove only replacement links managed by this package; leave a
+            # user-supplied .new layer alone.
+            for f in 02modules.new 03firmware.new; do
+                target=$(readlink -f "$profile/$f" 2>/dev/null || true)
+                case "$target" in
+                    */BOOT/*) rm -f "$profile/$f" ;;
+                esac
+            done
+            ln -sfn "../BOOT/$kernelver/00modules.sfs" "$profile/00modules.sfs"
+        fi
+    fi
+
+    mkdir -p "$STATE_DIR" 2>/dev/null || true
+    printf '%s\n' "$profile" > "$STATE_DIR/profile" 2>/dev/null || true
+    sync
+    log "installed $kernelver in $dest"
+    if [ "$NO_ACTIVATE" -eq 0 ]; then
+        if [ "$NEW_LAYERS" -eq 1 ]; then
+            log "$profile now boots $kernelver via 02modules.new"
+        else
+            log "$profile now points at $kernelver"
+        fi
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+case "$MODE" in
+    list)
+        list_profiles
+        exit 0
+        ;;
+    detect)
+        profile=$(choose_profile) || {
+            [ "$AUTO" -eq 1 ] && exit 0
+            die "no FRUGAL profile found"
+        }
+        printf '%s\n' "$profile"
+        exit 0
+        ;;
+esac
+
+profile=
+if [ "$MODE" = install ]; then
+    if ! profile=$(choose_profile); then
+        if [ "$AUTO" -eq 1 ]; then
+            log "no FRUGAL profile found; nothing to do"
+            exit 0
+        fi
+        die "no FRUGAL profile found (use --frugal-dir or --frugals-root)"
+    fi
+    log "using FRUGAL profile: $profile"
+    [ "$DRY_RUN" -eq 1 ] || [ "$(id -u)" -eq 0 ] || die "installation must run as root"
+fi
+
+work=
+if [ -n "$BUILD_DIR_ARG" ]; then
+    work=$BUILD_DIR_ARG
+    mkdir -p "$work"
+else
+    work=$(mktemp -d "${TMPDIR:-/tmp}/linux-cachyos-frugal.XXXXXX")
+fi
+cleanup() {
+    if [ "$KEEP_WORK" -eq 0 ] && [ -z "$BUILD_DIR_ARG" ] && [ -n "$work" ]; then
+        rm -rf "$work"
+    fi
+}
+trap cleanup EXIT
+
+if [ "$DRY_RUN" -eq 1 ]; then
+    # Do not download a 150 MB kernel package just to show the plan.
+    case "$SOURCE" in
+        latest|auto)
+            if cachyos_db_for "$work/cachyos.db"; then
+                info=$(latest_cachyos_info "$work/cachyos.db" || true)
+                [ -n "$info" ] && log "dry-run: latest CachyOS package is ${info%%$'\t'*}"
+            else
+                warn "dry-run: could not fetch the CachyOS repository database"
+            fi
+            ;;
+        installed)
+            info=$(installed_kernel_dir || true)
+            [ -n "$info" ] && log "dry-run: installed kernel is ${info%%$'\t'*}"
+            ;;
+    esac
+    if [ -n "$profile" ]; then
+        log "dry-run: would build artifacts and deploy to $profile"
+        if [ -n "$KERNEL_PKG_ARG" ]; then
+            log "dry-run: would use local package $KERNEL_PKG_ARG"
+        fi
+    else
+        log "dry-run: would build artifacts in $work"
+    fi
+    exit 0
+fi
+
+# Resolve the source.  "auto" means latest, then installed.
+src=
+if [ -n "$KERNEL_PKG_ARG" ]; then
+    [ -f "$KERNEL_PKG_ARG" ] || die "local kernel package not found: $KERNEL_PKG_ARG"
+    root=$work/local-pkg
+    rm -rf "$root"
+    mkdir -p "$root"
+    bsdtar -xf "$KERNEL_PKG_ARG" -C "$root" || die "cannot unpack $KERNEL_PKG_ARG"
+    d=$(find_modules_dir "$root") || die "no vmlinuz/modules in $KERNEL_PKG_ARG"
+    src=$(printf 'local\t%s\t%s' "$(basename "$d")" "$d")
+else
+    case "$SOURCE" in
+        latest)
+            src=$(prepare_source latest "$work") || {
+                warn "latest prebuilt package unavailable; falling back to the installed kernel"
+                src=$(prepare_source installed "$work") || die "no usable CachyOS kernel found"
+            }
+            ;;
+        installed)
+            src=$(prepare_source installed "$work") || die "linux-cachyos is not installed"
+            ;;
+        auto)
+            src=$(prepare_source latest "$work") || {
+                warn "latest prebuilt package unavailable; using installed kernel"
+                src=$(prepare_source installed "$work") || die "no usable CachyOS kernel found"
+            }
+            ;;
+    esac
+fi
+
+IFS=$'\t' read -r pkgver kernelver moddir <<< "$src"
+[ -n "$kernelver" ] && [ -n "$moddir" ] || die "could not determine kernel version"
+[ -d "$moddir" ] || die "kernel module directory not found: $moddir"
+log "kernel: $kernelver (CachyOS package $pkgver)"
+
+out=$work/artifacts
+rm -rf "$out"
+mkdir -p "$out"
+build_artifacts "$pkgver" "$kernelver" "$moddir" "$out" "$work"
+
+if [ "$MODE" = build ]; then
+    if [ -n "$BUILD_DIR_ARG" ]; then
+        cp -a "$out"/. "$BUILD_DIR_ARG"/
+        log "artifacts written to $BUILD_DIR_ARG"
+    else
+        # With no --build-dir, leave the generated files somewhere explicit.
+        dest=${LINUX_CACHYOS_FRUGAL_OUT:-$PWD/linux-cachyos-frugal-$kernelver}
+        mkdir -p "$dest"
+        cp -a "$out"/. "$dest"/
+        log "artifacts written to $dest"
+    fi
+    exit 0
+fi
+
+if [ -z "$profile" ]; then
+    die "no FRUGAL profile selected"
+fi
+deploy_artifacts "$profile" "$pkgver" "$kernelver" "$out"

@@ -1,0 +1,37 @@
+# Maintainer: arozoid
+pkgname=linux-cachyos-frugal
+pkgver=0.2.0
+pkgrel=1
+pkgdesc="Build and deploy FRUGAL boot artifacts from the latest prebuilt CachyOS kernel"
+arch=(any)
+url="https://github.com/arozoid/rstl.repo"
+license=(GPL-3.0-or-later)
+depends=(bash coreutils findutils util-linux gzip cpio kmod squashfs-tools zstd curl libarchive)
+optdepends=('linux-cachyos: prebuilt CachyOS kernel used with --source installed')
+install=linux-cachyos-frugal.install
+source=('mkFRkernel'
+        'w_init.frugal'
+        'linux-cachyos-frugal'
+        'linux-cachyos-frugal.hook'
+        'README.md'
+        'initrd-latest.gz::https://gitlab.com/firstrib/firstrib/-/raw/master/latest/build_system/initrd-latest.gz')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 linux-cachyos-frugal "$pkgdir/usr/bin/linux-cachyos-frugal"
+  install -Dm755 mkFRkernel "$pkgdir/usr/lib/linux-cachyos-frugal/mkFRkernel"
+  install -Dm644 w_init.frugal "$pkgdir/usr/lib/linux-cachyos-frugal/w_init"
+  install -Dm644 initrd-latest.gz "$pkgdir/usr/lib/linux-cachyos-frugal/initrd-latest.gz"
+  install -Dm644 linux-cachyos-frugal.hook \
+    "$pkgdir/usr/share/libalpm/hooks/90-linux-cachyos-frugal.hook"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/linux-cachyos-frugal/README.md"
+
+  if [ -f /usr/share/licenses/common/GPL3/license.txt ]; then
+    install -Dm644 /usr/share/licenses/common/GPL3/license.txt \
+      "$pkgdir/usr/share/licenses/linux-cachyos-frugal/LICENSE"
+  else
+    mkdir -p "$pkgdir/usr/share/licenses/linux-cachyos-frugal"
+    printf 'SPDX-License-Identifier: GPL-3.0-or-later\n' \
+      > "$pkgdir/usr/share/licenses/linux-cachyos-frugal/LICENSE"
+  fi
+}
