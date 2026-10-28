@@ -1,10 +1,10 @@
 Name:           rstl-pick
-Version:        2.2.0
+Version:        2.2.2
 Release:        1%{?dist}
 Summary:        Compact fuzzy-search TUI app picker for the rstl.sway desktop
 License:        MIT
 URL:            https://github.com/arozoid/rstl-pick
-Source0:        v2.2.0.tar.gz
+Source0:        v2.2.2.tar.gz
 
 BuildArch:      noarch
 
