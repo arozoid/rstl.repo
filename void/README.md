@@ -42,8 +42,7 @@ sudo xbps-install -S
 
 The first sync asks whether to import the repository's RSA public key. Accept
 it; the fingerprint is shown in the prompt. The `rstl.sway` installers import
-it automatically (`bin/install.sh`, `bin/install-min.sh`,
-`bin/install-base.sh`).
+it automatically (`bin/install`, `bin/minstall`, `bin/binstall`).
 
 Install packages exactly like from any other repository:
 
