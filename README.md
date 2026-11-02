@@ -22,6 +22,24 @@ package. The `void/` directory holds the XBPS repository tooling: the same finis
 Arch packages are converted to `.xbps` and indexed by `xbps-rindex`, in parallel with
 the RPM conversion.
 
+## release snapshots and GitHub Pages
+
+CI builds every package weekly (Sunday at 12:00 UTC, plus pushes and manual
+dispatches) and publishes each run as a GitHub release tagged
+`repo-YYYYMMDD-HHMMSS`. A release is a complete snapshot: every Arch
+`.pkg.tar.*`, every Fedora `.rpm` and every Void `.xbps` built by that run.
+
+The Pages repository is rebuilt from the newest three releases. CI downloads
+the current and previous snapshots, merges their packages, regenerates the
+pacman/dnf/xbps metadata, generates the site and deploys it. Older releases
+are pruned only **after** a successful deploy, so the published repository
+always has the current build plus roughly two previous weekly builds. Keeping
+three full snapshots also keeps up to three versions of each program available
+for rollback.
+
+Release retention is controlled by `RELEASES_TO_KEEP` at the top of
+[`.github/workflows/build.yml`](.github/workflows/build.yml).
+
 
 ## packages
 

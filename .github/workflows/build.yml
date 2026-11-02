@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '0 12 * * *'  # daily at UTC noon
+    - cron: '0 12 * * 0'  # weekly, Sunday at UTC noon
   workflow_dispatch:
 
 permissions:
@@ -16,6 +16,12 @@ permissions:
 concurrency:
   group: pages
   cancel-in-progress: false
+
+env:
+  # Each release is a full snapshot of every package. Keeping three releases
+  # means the repository always carries the current build plus the two
+  # previous weekly builds, so old versions stay installable for ~3 weeks.
+  RELEASES_TO_KEEP: 3
 
 jobs:
   # -------------------------------------------------------------------------
@@ -252,7 +258,7 @@ jobs:
 
       - uses: actions/upload-artifact@v5
         with:
-          name: rpm-repo
+          name: rpm-packages
           path: /tmp/rpms
           retention-days: 1
 
@@ -322,16 +328,219 @@ jobs:
 
       - uses: actions/upload-artifact@v5
         with:
-          name: void-repo
+          name: void-packages
           path: /tmp/xbps
           retention-days: 1
 
   # -------------------------------------------------------------------------
-  # assemble — collect every slot's packages, write the repo db, generate the
-  # static site and hand the tree to the Pages deploy.
+  # publish-release — bundle every package built by this run into one GitHub
+  # release. The release is the immutable source of truth for the repository
+  # snapshots; the Pages repo is rebuilt from it below.
+  # -------------------------------------------------------------------------
+  publish-release:
+    needs: [build, rpm, void]
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - name: Collect Arch packages
+        uses: actions/download-artifact@v5
+        with:
+          pattern: shard-*
+          path: /tmp/assets/arch
+          merge-multiple: true
+
+      - name: Collect Fedora RPMs
+        uses: actions/download-artifact@v5
+        with:
+          name: rpm-packages
+          path: /tmp/assets/fedora
+
+      - name: Collect Void XBPS packages
+        uses: actions/download-artifact@v5
+        with:
+          name: void-packages
+          path: /tmp/assets/void
+
+      - name: Flatten release assets
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/assets/release
+          find /tmp/assets/arch -type f -name '*.pkg.tar.*' ! -name '*.sig' \
+            -exec cp -n -t /tmp/assets/release {} +
+          find /tmp/assets/fedora -type f -name '*.rpm' \
+            -exec cp -n -t /tmp/assets/release {} +
+          find /tmp/assets/void -type f -name '*.xbps' \
+            -exec cp -n -t /tmp/assets/release {} +
+          count=$(find /tmp/assets/release -type f | wc -l)
+          [ "$count" -gt 0 ] || { echo "::error::no packages to release" >&2; exit 1; }
+          echo "release assets: $count"
+
+      - name: Create GitHub release and upload packages
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="repo-$(date -u +%Y%m%d-%H%M%S)"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            tag="${tag}-${GITHUB_RUN_ID}"
+          fi
+          gh release create "$tag" \
+            --title "Package snapshot $(date -u +%Y-%m-%d\ %H:%M\ UTC)" \
+            --notes "Full rstl.repo snapshot for Arch Linux, Fedora and Void Linux.
+
+          Built from \`${GITHUB_SHA}\` by run ${GITHUB_RUN_ID}.
+          The published repository is assembled from this release and the
+          previous $((RELEASES_TO_KEEP - 1)) releases, then the oldest releases are pruned." \
+            --latest
+          gh release upload "$tag" /tmp/assets/release/* --clobber
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "published $tag"
+
+  # -------------------------------------------------------------------------
+  # arch-repo — download the current and previous releases, merge their Arch
+  # packages and rebuild the pacman database.
+  # -------------------------------------------------------------------------
+  arch-repo:
+    needs: publish-release
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+      options: --user root
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm git github-cli pacman-contrib jq
+
+      - uses: actions/checkout@v7
+
+      - name: Download recent releases
+        run: >-
+          bash .github/scripts/download-releases.sh
+          /tmp/releases "${{ env.RELEASES_TO_KEEP }}" '*.pkg.tar.*'
+
+      - name: Merge Arch packages and rebuild database
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/repo/arch
+          # Oldest release first, so a rebuilt same-version package from the
+          # newest snapshot always wins.
+          while IFS= read -r d; do
+            find "$d" -type f -name '*.pkg.tar.*' ! -name '*.sig' \
+              -exec cp -f -t /tmp/repo/arch {} +
+          done < <(find /tmp/releases -mindepth 1 -maxdepth 1 -type d | sort)
+          cd /tmp/repo/arch
+          repo-add -n rstl-repo.db.tar.gz *.pkg.tar.*
+          echo "arch packages: $(find . -name '*.pkg.tar.*' ! -name '*.sig' | wc -l)"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: arch-repo
+          path: /tmp/repo/arch
+          retention-days: 1
+
+  # -------------------------------------------------------------------------
+  # fedora-repo — merge RPMs from the current and previous releases and
+  # regenerate the dnf repository metadata.
+  # -------------------------------------------------------------------------
+  fedora-repo:
+    needs: publish-release
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Install tools
+        run: dnf -y install createrepo_c gh git
+
+      - uses: actions/checkout@v7
+
+      - name: Download recent releases
+        run: >-
+          bash .github/scripts/download-releases.sh
+          /tmp/releases "${{ env.RELEASES_TO_KEEP }}" '*.rpm'
+
+      - name: Merge RPMs and rebuild metadata
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/repo/fedora
+          while IFS= read -r d; do
+            find "$d" -type f -name '*.rpm' \
+              -exec cp -f -t /tmp/repo/fedora {} +
+          done < <(find /tmp/releases -mindepth 1 -maxdepth 1 -type d | sort)
+          createrepo_c /tmp/repo/fedora
+          printf '%s\n' \
+            '[rstl-repo]' \
+            'name=rstl.repo' \
+            'baseurl=https://arozoid.github.io/rstl.repo/fedora/' \
+            'enabled=1' \
+            'gpgcheck=0' > /tmp/repo/fedora/rstl.repo
+          echo "fedora packages: $(find /tmp/repo/fedora -maxdepth 1 -name '*.rpm' | wc -l)"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: fedora-repo
+          path: /tmp/repo/fedora
+          retention-days: 1
+
+  # -------------------------------------------------------------------------
+  # void-repo — merge XBPS packages from the current and previous releases and
+  # rebuild/sign the xbps repository index.
+  # -------------------------------------------------------------------------
+  void-repo:
+    needs: publish-release
+    runs-on: ubuntu-latest
+    container: ghcr.io/void-linux/void-glibc-full:latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Install tools
+        shell: sh
+        run: xbps-install -Sy bash git curl zstd tar xbps github-cli
+
+      - uses: actions/checkout@v7
+
+      - name: Download recent releases
+        shell: bash
+        run: >-
+          bash .github/scripts/download-releases.sh
+          /tmp/releases "${{ env.RELEASES_TO_KEEP }}" '*.xbps'
+
+      - name: Merge XBPS packages and rebuild index
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/repo/void
+          while IFS= read -r d; do
+            find "$d" -type f -name '*.xbps' \
+              -exec cp -f -t /tmp/repo/void {} +
+          done < <(find /tmp/releases -mindepth 1 -maxdepth 1 -type d | sort)
+          xbps-rindex -a /tmp/repo/void/*.xbps
+          xbps-rindex -s \
+            --privkey void/keys/rstl-repo.pem \
+            --signedby "rstl.repo <rstl@arozoid.github.io>" \
+            /tmp/repo/void
+          xbps-rindex -S --privkey void/keys/rstl-repo.pem /tmp/repo/void/*.xbps
+          echo "void packages: $(find /tmp/repo/void -maxdepth 1 -name '*.xbps' | wc -l)"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: void-repo
+          path: /tmp/repo/void
+          retention-days: 1
+
+  # -------------------------------------------------------------------------
+  # assemble — collect the three merged repositories, generate the static site
+  # and hand the tree to the Pages deploy.
   # -------------------------------------------------------------------------
   assemble:
-    needs: [enumerate, build, rpm, void]
+    needs: [arch-repo, fedora-repo, void-repo]
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
@@ -342,29 +551,16 @@ jobs:
 
       - uses: actions/checkout@v7
 
-      - name: Collect packages
+      - name: Collect Arch repo
         uses: actions/download-artifact@v5
         with:
-          pattern: shard-*
-          path: /tmp/repo
-          merge-multiple: true
+          name: arch-repo
+          path: /tmp/repo/arch
 
-      - name: Verify collected packages
-        run: |
-          test -n "$(find /tmp/repo -type f -name '*.pkg.tar.*' 2>/dev/null | head -1)" \
-            || { echo "::error::no package artifacts collected (nothing built?)" >&2; exit 1; }
-
-      - name: Flatten packages into arch/
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/repo/arch
-          find /tmp/repo -mindepth 1 -type f -name '*.pkg.tar.*' -exec mv -t /tmp/repo/arch {} +
-          ls -1 /tmp/repo/arch
-
-      - name: Collect RPM repo
+      - name: Collect Fedora repo
         uses: actions/download-artifact@v5
         with:
-          name: rpm-repo
+          name: fedora-repo
           path: /tmp/repo/fedora
 
       - name: Collect Void repo
@@ -373,11 +569,15 @@ jobs:
           name: void-repo
           path: /tmp/repo/void
 
-      - name: Create repo database
+      - name: Verify collected repositories
         run: |
           set -euo pipefail
-          cd /tmp/repo/arch
-          repo-add -n rstl-repo.db.tar.gz *.pkg.tar.*
+          test -n "$(find /tmp/repo/arch -type f -name '*.pkg.tar.*' | head -1)" \
+            || { echo "::error::no Arch packages collected" >&2; exit 1; }
+          test -n "$(find /tmp/repo/fedora -type f -name '*.rpm' | head -1)" \
+            || { echo "::error::no Fedora packages collected" >&2; exit 1; }
+          test -n "$(find /tmp/repo/void -type f -name '*.xbps' | head -1)" \
+            || { echo "::error::no Void packages collected" >&2; exit 1; }
 
       - name: Link the Arch repo from the root
         run: |
@@ -407,3 +607,33 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+  # -------------------------------------------------------------------------
+  # prune — keep only the newest snapshots. Runs after the site has been
+  # deployed so a failed deployment never costs us the releases it needs.
+  # -------------------------------------------------------------------------
+  prune:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete releases older than the retention window
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mapfile -t tags < <(
+            gh release list --limit 100 --exclude-drafts --exclude-pre-releases \
+              --json tagName --jq '.[].tagName' \
+              | grep -E '^repo-' || true
+          )
+          old=("${tags[@]:${RELEASES_TO_KEEP}}")
+          if [ "${#old[@]}" -eq 0 ]; then
+            echo "nothing to prune (keeping ${#tags[@]} release(s))"
+            exit 0
+          fi
+          for tag in "${old[@]}"; do
+            [ -n "$tag" ] || continue
+            echo "pruning $tag"
+            gh release delete "$tag" --yes --cleanup-tag
+          done

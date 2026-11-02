@@ -51,25 +51,36 @@ xbps_meta() {
 
 # ---------------------------------------------------------------------------
 # collect the package index — one entry per name, per format
+#
+# A repository snapshot can carry several versions of the same package (the
+# current build plus the previous two releases). The site always advertises
+# the newest one; older files remain in the repo directories for rollback and
+# are kept in the release snapshots.
 # ---------------------------------------------------------------------------
+newest_of() {
+  local current=${1:-} candidate=$2
+  [ -n "$current" ] || { printf '%s' "$candidate"; return; }
+  printf '%s\n%s\n' "$current" "$candidate" | sort -V | tail -n1
+}
+
 declare -A arch_of=() rpm_of=() xbps_of=() all=()
 for f in arch/*.pkg.tar.*; do
   case $f in *.sig) continue ;; esac
   [ -e "$f" ] || continue
   n=$(pacman -Qip "$f" | sed -n 's/^Name *: //p')
-  arch_of[$n]=$f
+  arch_of[$n]=$(newest_of "${arch_of[$n]:-}" "$f")
   all[$n]=1
 done
 for f in fedora/*.rpm; do
   [ -e "$f" ] || continue
   IFS=$'\t' read -r n _ _ < <(rpm_meta "$f")
-  rpm_of[$n]=$f
+  rpm_of[$n]=$(newest_of "${rpm_of[$n]:-}" "$f")
   all[$n]=1
 done
 for f in void/*.xbps; do
   [ -e "$f" ] || continue
   IFS=$'\t' read -r n _ _ < <(xbps_meta "$f")
-  xbps_of[$n]=$f
+  xbps_of[$n]=$(newest_of "${xbps_of[$n]:-}" "$f")
   all[$n]=1
 done
 
@@ -118,17 +129,17 @@ Server = $base/arch/</pre>
 <thead><tr><th>package</th><th>version</th><th>arch</th><th>size</th><th>download</th></tr></thead>
 <tbody>
 EOF
-  for f in arch/*.pkg.tar.*; do
-    case $f in *.sig) continue ;; esac
-    [ -e "$f" ] || continue
-    info=$(pacman -Qip "$f")
-    n=$(printf '%s\n' "$info" | sed -n 's/^Name *: //p')
-    v=$(printf '%s\n' "$info" | sed -n 's/^Version *: //p')
-    a=$(printf '%s\n' "$info" | sed -n 's/^Architecture *: //p')
-    b=$(basename "$f")
-    printf '<tr><td><a href="%s.html">%s</a></td><td>%s</td><td>%s</td><td>%s</td><td><a href="arch/%s" title="%s">download</a></td></tr>\n' \
-      "$n" "$n" "$v" "${a:-?}" "$(human "$f")" "$b" "$b"
-  done
+  if [ "${#arch_of[@]}" -gt 0 ]; then
+    while IFS= read -r n; do
+      f=${arch_of[$n]}
+      info=$(pacman -Qip "$f")
+      v=$(printf '%s\n' "$info" | sed -n 's/^Version *: //p')
+      a=$(printf '%s\n' "$info" | sed -n 's/^Architecture *: //p')
+      b=$(basename "$f")
+      printf '<tr><td><a href="%s.html">%s</a></td><td>%s</td><td>%s</td><td>%s</td><td><a href="arch/%s" title="%s">download</a></td></tr>\n' \
+        "$n" "$n" "$v" "${a:-?}" "$(human "$f")" "$b" "$b"
+    done < <(printf '%s\n' "${!arch_of[@]}" | sort)
+  fi
   cat <<'EOF'
 </tbody>
 </table>
@@ -148,13 +159,15 @@ gpgcheck=0</pre>
 <thead><tr><th>package</th><th>version</th><th>arch</th><th>size</th><th>download</th></tr></thead>
 <tbody>
 EOF
-  for f in fedora/*.rpm; do
-    [ -e "$f" ] || continue
-    IFS=$'\t' read -r n v a < <(rpm_meta "$f")
-    b=$(basename "$f")
-    printf '<tr><td><a href="%s.html">%s</a></td><td>%s</td><td>%s</td><td>%s</td><td><a href="fedora/%s" title="%s">download</a></td></tr>\n' \
-      "$n" "$n" "$v" "${a:-?}" "$(human "$f")" "$b" "$b"
-  done
+  if [ "${#rpm_of[@]}" -gt 0 ]; then
+    while IFS= read -r n; do
+      f=${rpm_of[$n]}
+      IFS=$'\t' read -r _ v a < <(rpm_meta "$f")
+      b=$(basename "$f")
+      printf '<tr><td><a href="%s.html">%s</a></td><td>%s</td><td>%s</td><td>%s</td><td><a href="fedora/%s" title="%s">download</a></td></tr>\n' \
+        "$n" "$n" "$v" "${a:-?}" "$(human "$f")" "$b" "$b"
+    done < <(printf '%s\n' "${!rpm_of[@]}" | sort)
+  fi
   cat <<'EOF'
 </tbody>
 </table>
@@ -171,13 +184,15 @@ EOF
 <thead><tr><th>package</th><th>version</th><th>arch</th><th>size</th><th>download</th></tr></thead>
 <tbody>
 EOF
-  for f in void/*.xbps; do
-    [ -e "$f" ] || continue
-    IFS=$'\t' read -r n v a < <(xbps_meta "$f")
-    b=$(basename "$f")
-    printf '<tr><td><a href="%s.html">%s</a></td><td>%s</td><td>%s</td><td>%s</td><td><a href="void/%s" title="%s">download</a></td></tr>\n' \
-      "$n" "$n" "$v" "${a:-?}" "$(human "$f")" "$b" "$b"
-  done
+  if [ "${#xbps_of[@]}" -gt 0 ]; then
+    while IFS= read -r n; do
+      f=${xbps_of[$n]}
+      IFS=$'\t' read -r _ v a < <(xbps_meta "$f")
+      b=$(basename "$f")
+      printf '<tr><td><a href="%s.html">%s</a></td><td>%s</td><td>%s</td><td>%s</td><td><a href="void/%s" title="%s">download</a></td></tr>\n' \
+        "$n" "$n" "$v" "${a:-?}" "$(human "$f")" "$b" "$b"
+    done < <(printf '%s\n' "${!xbps_of[@]}" | sort)
+  fi
   cat <<'EOF'
 </tbody>
 </table>
