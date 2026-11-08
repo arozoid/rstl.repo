@@ -1,10 +1,10 @@
 Name:           ratl
-Version:        0.3.0
+Version:        0.4.0
 Release:        1%{?dist}
 Summary:        JSON-driven terminal dialogs rendered with ratatui
 License:        MIT
 URL:            https://github.com/arozoid/ratl
-Source0:        v0.3.0.tar.gz
+Source0:        v0.4.0.tar.gz
 
 BuildArch:      x86_64
 
@@ -40,6 +40,9 @@ install -Dm644 ratl.json %{buildroot}/usr/share/doc/%{name}/ratl.json
 /usr/share/doc/%{name}/ratl.json
 
 %changelog
+* Tue Nov 03 2026 rstl.repo <rstl@arozoid.dev> - 0.4.0-1
+- Support full-range sliders and focus navigation across choice controls
+
 * Tue Nov 03 2026 rstl.repo <rstl@arozoid.dev> - 0.3.0-1
 - Add fullscreen dialogs, fixed box widths, slider numeric entry, and searchable boxes
 
