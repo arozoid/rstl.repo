@@ -1,6 +1,6 @@
 # Maintainer: arozoid 
 pkgname=rstlpk
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="Minimal polkit authentication agent for the rstl.sway rice (no gtk)"
 arch=(x86_64)
