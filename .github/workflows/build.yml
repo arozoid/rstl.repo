@@ -389,11 +389,11 @@ jobs:
           fi
           gh release create "$tag" \
             --title "Package snapshot $(date -u +%Y-%m-%d\ %H:%M\ UTC)" \
-            --notes "Full rstl.repo snapshot for Arch Linux, Fedora and Void Linux.
+            --notes "rstl.repo snapshot for Arch Linux, Fedora and Void Linux
+          > built from \`${GITHUB_SHA}\` by run ${GITHUB_RUN_ID}
+          published repo is assembled from the last $((RELEASES_TO_KEEP)) releases (inclusive of this one) in order to keep up old repos running for 2-3 weeks
 
-          Built from \`${GITHUB_SHA}\` by run ${GITHUB_RUN_ID}.
-          The published repository is assembled from this release and the
-          previous $((RELEASES_TO_KEEP - 1)) releases, then the oldest releases are pruned." \
+          the rest are pruned to save space" \
             --latest
           gh release upload "$tag" /tmp/assets/release/* --clobber
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
